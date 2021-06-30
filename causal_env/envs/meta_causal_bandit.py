@@ -38,8 +38,8 @@ class MetaCausalBanditsEnv(gym.Env):
         return causal_model
 
     @property
-    def causal_models(self): # for the agent to access
-        return [np.nonzero(t) for t in self.tasks]
+    def causal_model(self): # for the agent to access
+        return np.nonzero(self.current_task) 
 
     def reset(self):
         self.current_task = np.random.choice(self.tasks)
@@ -49,9 +49,10 @@ class MetaCausalBanditsEnv(gym.Env):
         return super().seed(seed=seed)
 
     def step(self, arm):
-        # bit of a random thing right
-        # usually the reward is distributed with a mean of 0
-        # the causal arms cause the mean to increase
-        # check about the number of trials 
-        self.timestep += 1
-        return self.timestep, np.random.normal(loc=self.current_task[arm]), self.timestep >= self.config.episode_len, dict(self.config)
+
+        timestep = self.timestep
+
+        if self.timestep + 1 > self.config.episode_len:
+            self.reset()
+
+        return timestep, np.random.normal(loc=self.current_task[arm]), timestep >= self.config.episode_len, dict(self.config)
