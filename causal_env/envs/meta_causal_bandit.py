@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class MetaCausalBanditConfig:
+class MetaCausalBanditsConfig:
     episode_len: int
 
     total_arms: int

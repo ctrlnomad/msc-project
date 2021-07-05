@@ -8,16 +8,26 @@ from numpy.core.fromnumeric import nonzero
 
 import torch 
 import torchvision
-
+from typing import Any, Tuple, Dict, List
 from collections import namedtuple
 
+import logging
+logger = logging.getLogger(__name__)
 @dataclass
-class CausalMnistBanditConfig:
+class CausalMnistBanditsConfig:
     num_arms: int
+    causal_arms: int
 
+    num_ts: int
+    seed: int
 
-
-Timestep = namedtuple('Timestep', ['_context', 'high_dim_context', 'treatments', 'reward', 'id'])
+@dataclass
+class Timestep:
+    context: List[int] = None
+    high_dim_context: torch.Tensor = None
+    treatments: List[int] = None
+    reward: float = None
+    id: int = None
 
 class CausalMnistBanditsEnv(gym.Env):
     """
@@ -29,7 +39,7 @@ class CausalMnistBanditsEnv(gym.Env):
     The agent can intervene by selecting to pull an arm or choose to do nothing. 
     The other arms are set to 0,1 depending on a biased coin flip. 
     """
-    def __init__(self, config) -> None:
+    def init(self, config: CausalMnistBanditsConfig) -> None:
         super().__init__()
 
         self.config = config
@@ -40,13 +50,19 @@ class CausalMnistBanditsEnv(gym.Env):
         self.observation_space = spaces.Box(0, 122, (self.config.num_arms, 28, 28) ) # what about the other arms observation
 
         self.default_probs = np.random.rand(self.config.num_arms)
+    
+        causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
+        
+        self.digit_ITEs = np.zeros(config.num_arms)
+        self.digit_ITEs[causal_ids] = np.random.rand(self.config.causal_arms)*2-1
 
-        self.digit_ITE = np.random.rand(self.config.num_arms) *2-1
-
-        self.mnist_dataset = torchvision.datasets.MNIST('/data/mnist', train=True, download=True,
+        self.mnist_dataset = torchvision.datasets.MNIST('./data/mnist', train=True, download=True,
                              transform=torchvision.transforms.Compose([
                                torchvision.transforms.ToTensor(),
                              ]))
+        self.seed(config.seed)
+        logger.info('environment inited')
+        self._inited = True
 
     def sample_mnist(self, num):
         # samples an image of num from the MNIST dataset
@@ -59,25 +75,30 @@ class CausalMnistBanditsEnv(gym.Env):
 
     def _make_timestep(self, tsid) -> Any:
         ts = Timestep()
-        ts._context = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
-        ts.high_dim_context = torch.stack([self.sample_mnist(n) for n in ts._context])
+        ts.context = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
+        ts.high_dim_context = torch.stack([self.sample_mnist(n) for n in ts.context]).squeeze()
         ts.treatments = (self.default_probs > np.random.rand(self.config.num_arms)) * 1
         ts.id = tsid
         return ts
 
 
     def seed(self, seed: int) -> List[int]:
-        return super().seed(seed=seed)
+        np.random.seed(seed)
+        torch.random.manual_seed(seed)
 
-    def step(self, action: _ActionType) -> Tuple[_OperationType, float, bool, Dict[str, Any]]:
+    def step(self, action) -> Tuple[Any, float, bool, Dict[str, Any]]:
         assert self.action_space.contains(action)
 
-        if action != self.config.num_arms + 1:
+        if action != self.config.num_arms:
             self.current_timestep.treatments[action] = 1
         
-        reward_mean = self.digit_ITE[self.current_timestep.treatments].sum()
+        reward_mean = self.digit_ITEs[self.current_timestep.treatments].sum()
+        reward = np.random.normal(reward_mean, 1)
+        treatments = self.current_timestep.treatments
 
-        return np.random.normal(reward_mean, 1) # constant variance
+        # generate new tiemstep
+        self.current_timestep = self._make_timestep(self.current_timestep.id + 1)
+        return self.current_timestep.high_dim_context, reward, self.current_timestep.id >= self.config.num_ts, treatments
 
 
 
