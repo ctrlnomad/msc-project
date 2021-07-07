@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Options(CausalMnistBanditsConfig, AgentConfig):
   log_file: str 
-  cuda: bool = True
   
+  cuda: bool = True
+
   seed: int = 5000
   debug: bool = False
 

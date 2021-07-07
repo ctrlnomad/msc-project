@@ -25,26 +25,29 @@ class CausalMnistBanditsConfig:
 class Timestep:
     info: Any = None
     context: torch.Tensor = None
-    treatments: List[int] = None
+    treatments: torch.Tensor = None
     reward: float = None
     done: bool = False
     id: int = None
 
 class TimestepDataset(trchdata.Dataset):
 
-    def __init__(self) -> None:
+    def __init__(self, dataset: Timestep) -> None:
         super().__init__()
+        self.dataset = dataset
     
     @classmethod
     def build(memory: List[Timestep]):
-        seq = Timestep(*zip(memory))
-        pass
+        dataset = Timestep(*zip(memory))
+        return TimestepDataset(dataset)
 
     def __get_item___(self, i):
-        pass
+        return self.dataset.context[i], \
+            self.dataset.treatments[i], \
+            self.dataset.reward[i]
 
     def __len__(self):
-        pass
+        return len(self.dataset.rewards)
 
 class CausalMnistBanditsEnv(gym.Env):
     """
