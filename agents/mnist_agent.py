@@ -7,40 +7,60 @@ import torch.nn as nn
 import torch.optim as optim
 
 from causal_env.envs import Timestep
+
+def mlp(inp):
+    return nn.Sequential([
+            nn.Linear(inp, 50),
+            nn.LeakyReLU(),
+            nn.Dropout(p=1/4),
+            nn.Linear(50, 25),
+            nn.LeakyReLU(),
+            nn.Dropout(p=1/4),
+            nn.Linear(25, 2), # mu and sigma
+
+        ])
+
 class BayesianConvNet(nn.Module):
-    """
-    should have two brancches for two treatment effects
-    """
+
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(320, 50)
-        self.fc2 = nn.Linear(50, 1)
+        self.conv_block = nn.Sequential([
+            nn.Conv2d(1, 10, kernel_size=5),
+            nn.Dropout2d(),
+            nn.Conv2d(10, 20, kernel_size=5)
+        ])
 
-    def forward(self, x):
-        x = torch.relu(torch.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = torch.relu(torch.max_pool2d(self.conv1(x), 2))
+        self.treatment_effect = mlp(320)
+        self.no_treatment_effect = mlp(320)
+
+    def forward(self, x, t: int):
+        x = self.conv_block(x)
         x = torch.view(-1, 320)
-        x = torch.relu(self.fc1(x))
-        # two separate confounders? 
-        x = torch.dropout(x, training=True) # TODO: does just this make it a bayesian network?
-        x = self.fc2(x)
 
-    def compute_uncertainty(self, x, n_samples):
+        if t:
+            r_dist = self.treatment_effect(x)
+        else:
+            r_dist = self.no_treatment_effect(x)
+
+        return r_dist
+        
+
+    def compute_uncertainty(self, x,  n_samples):
         # compute entropy with dropout
         bs = len(x)
-        result = torch.zeros((bs, n_samples))
+        result = torch.zeros((bs, 2, n_samples)) # two for binary treatment
         for i in range(n_samples):
-            result[i] = self(x)
-        return result.var(dim=-1)
+            result[..., 0 , i] = self(x, 0)[0]
+            result[..., 1 , i] = self(x, 1)[0] 
+        return result.var(dim=-1) # Var[E[Y | X]]
 
 
 class AgentConfig:
     dim_in: Tuple[int] = (28, 28)
     memsize: int = 100_000
     mc_dropout_samples: int = 100
+
+    cuda: bool = True
 
 class CmnistBanditAgent:
     """
@@ -63,10 +83,17 @@ class CmnistBanditAgent:
         
         # p(r | x, t, w) for each of the digits
         self.effect_estimator = BayesianConvNet()
+        self.gpu = config.cuda
+        if self.gpu:
+            self.effect_estimator.cuda()
         self.n_samples = config.mc_dropout_samples
 
     def train(self, n_epoch):
-        pass
+
+        batch_timestep = Timestep(*zip(self.memory))
+        # to dataset, dataloader
+        # to batches 
+        # nll loss and adam
 
     def calculate_uncertainties(self, contexts: torch.Tensor):
         variances = self.effect_estimator.compute_uncertainty(contexts, self.n_samples)

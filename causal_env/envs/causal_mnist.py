@@ -6,7 +6,9 @@ from dataclasses import dataclass
 
 import torch 
 import torchvision
-from typing import Any, Tuple, Dict, List
+import torch.distributions as distributions
+import torch.utils.data as trchdata
+from typing import Any, Sequence, Tuple, Dict, List
 
 
 import logging
@@ -21,12 +23,28 @@ class CausalMnistBanditsConfig:
 
 @dataclass
 class Timestep:
-    context: List[int] = None
-    high_dim_context: torch.Tensor = None
+    info: Any = None
+    context: torch.Tensor = None
     treatments: List[int] = None
     reward: float = None
     done: bool = False
     id: int = None
+
+class TimestepDataset(trchdata.Dataset):
+
+    def __init__(self) -> None:
+        super().__init__()
+    
+    @classmethod
+    def build(memory: List[Timestep]):
+        seq = Timestep(*zip(memory))
+        pass
+
+    def __get_item___(self, i):
+        pass
+
+    def __len__(self):
+        pass
 
 class CausalMnistBanditsEnv(gym.Env):
     """
@@ -54,12 +72,10 @@ class CausalMnistBanditsEnv(gym.Env):
     
         causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
 
-        """
-        self.ite = np.zeros(2, config.num_arms) 
-        """
 
-        self.digit_ITEs = np.zeros(config.num_arms) # this should be estimated differently
-        self.digit_ITEs[causal_ids] = np.random.rand(self.config.causal_arms)*2-1
+        self.ite = np.zeros(2, config.num_arms) 
+        self.ite[:, causal_ids] = np.random.rand(2, self.config.causal_arms)*2-1
+        self.variance = np.random.rand(2, config.num_arms) * 2
 
         self.mnist_dataset = torchvision.datasets.MNIST('./data/mnist', train=True, download=True,
                              transform=torchvision.transforms.Compose([
@@ -81,8 +97,8 @@ class CausalMnistBanditsEnv(gym.Env):
 
     def _make_timestep(self, tsid) -> Any:
         ts = Timestep()
-        ts.context = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
-        ts.high_dim_context = torch.stack([self.sample_mnist(n) for n in ts.context]).squeeze()
+        ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
+        ts.context = torch.stack([self.sample_mnist(n) for n in ts.context]).squeeze()
         ts.treatments = (self.default_probs > np.random.rand(self.config.num_arms)) * 1
         ts.done = tsid >= self.config.num_ts
         ts.id = tsid
@@ -99,12 +115,18 @@ class CausalMnistBanditsEnv(gym.Env):
         if action != self.config.num_arms:
             self.current_timestep.treatments[action] = 1
         
-        reward_mean = self.digit_ITEs[self.current_timestep.treatments].sum()
-        reward = np.random.normal(reward_mean, 1)
+        reward_mean = self.ite[self.current_timestep.treatments, :]
+        reward_variances = self.variances[self.current_timestep.treatments, :]
+
+        diag_vars = torch.zeros(len(self.current_timestep.treatments))
+        diag_vars[torch.eye(len(self.current_timestep.treatments))] = reward_variances
+
+        reward = distributions.MultivariateNormal(reward_mean, reward_variances).sample()
 
         # generate new tiemstep
         self.current_timestep = self._make_timestep(self.current_timestep.id + 1)
         self.current_timestep.reward = reward
+
         return self.current_timestep 
 
 
