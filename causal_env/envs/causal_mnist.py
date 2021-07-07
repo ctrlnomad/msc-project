@@ -54,7 +54,11 @@ class CausalMnistBanditsEnv(gym.Env):
     
         causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
 
-        self.digit_ITEs = np.zeros(config.num_arms)
+        """
+        self.ite = np.zeros(2, config.num_arms) 
+        """
+
+        self.digit_ITEs = np.zeros(config.num_arms) # this should be estimated differently
         self.digit_ITEs[causal_ids] = np.random.rand(self.config.causal_arms)*2-1
 
         self.mnist_dataset = torchvision.datasets.MNIST('./data/mnist', train=True, download=True,

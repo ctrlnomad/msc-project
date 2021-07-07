@@ -1,9 +1,12 @@
+from typing import Tuple
 import numpy as np
+from collections import deque
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from causal_env.envs import Timestep
 class BayesianConvNet(nn.Module):
     """
     should have two brancches for two treatment effects
@@ -25,9 +28,19 @@ class BayesianConvNet(nn.Module):
         x = torch.dropout(x, training=True) # TODO: does just this make it a bayesian network?
         x = self.fc2(x)
 
-    def compute_entropy(x, n_samples):
+    def compute_uncertainty(self, x, n_samples):
         # compute entropy with dropout
-        pass
+        bs = len(x)
+        result = torch.zeros((bs, n_samples))
+        for i in range(n_samples):
+            result[i] = self(x)
+        return result.var(dim=-1)
+
+
+class AgentConfig:
+    dim_in: Tuple[int] = (28, 28)
+    memsize: int = 100_000
+    mc_dropout_samples: int = 100
 
 class CmnistBanditAgent:
     """
@@ -41,23 +54,27 @@ class CmnistBanditAgent:
     the other times we learn by choosing based on epsitemic uncertainty
     we evaluate by regret. 
     """
-    def __init__(self, ):
+    def __init__(self, config: AgentConfig):
         # learning is the ITE of causal arms
-        self.episode_buffer = []
+        self.memory = deque(maxlen=config.memsize)
         self.possible_models = []
 
         # needs to determine ITE
-        # needs p(r | x, t, w) for each of the digits
         
-        self.ite_network = BayesianConvNet
+        # p(r | x, t, w) for each of the digits
+        self.effect_estimator = BayesianConvNet()
+        self.n_samples = config.mc_dropout_samples
 
-    def choose_intervention(self):
+    def train(self, n_epoch):
         pass
 
-    def observe(self, actions, reward):
-        # update parameters, calculate likelihoods
-        # calculate the structural parameter
-        pass
+    def calculate_uncertainties(self, contexts: torch.Tensor):
+        variances = self.effect_estimator.compute_uncertainty(contexts, self.n_samples)
+        return variances
+
+    def remember(self, timestep: Timestep):
+        self.memory.append(timestep)
+
 
     
     
