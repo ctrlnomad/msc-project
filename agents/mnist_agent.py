@@ -32,8 +32,10 @@ class BayesianConvNet(nn.Module):
         super().__init__()
         self.conv_block = nn.Sequential(
             nn.Conv2d(1, 10, kernel_size=5),
+            nn.MaxPool2d(2),
             nn.Dropout2d(),
-            nn.Conv2d(10, 20, kernel_size=5)
+            nn.Conv2d(10, 20, kernel_size=5),
+            nn.MaxPool2d(2),
         )
 
         self.net = mlp(320)
@@ -45,13 +47,14 @@ class BayesianConvNet(nn.Module):
         )
 
     def forward(self, x):
-        x = self.conv_block(x).view(-1, 320)
+        x = self.conv_block(x)
+        x = x.view(-1, 320)
 
         emb  = self.net(x)
         mu_pred = self.mu_theta(emb)
         sigma_pred = self.sigma_theta(emb)
 
-        return mu_pred, sigma_pred
+        return mu_pred.T, sigma_pred.T
         
 
     def compute_uncertainty(self, x,  n_samples):
@@ -103,7 +106,7 @@ class CmnistBanditAgent:
 
         opt = optim.Adam(self.effect_estimator.parameters())
 
-        for contexts,treatments, effects in loader:
+        for contexts, treatments, effects in loader:
             opt.zero_grad()
             
             contexts = contexts.cuda() if self.config.cuda else contexts
@@ -112,16 +115,18 @@ class CmnistBanditAgent:
             
             # contextsss reshape bbbbbb
             contexts =contexts.view(-1, *self.config.dim_in)
-            print(effects.shape, treatments.shape, contexts.shape)
-            mu_pred, sigma_pred  = self.effect_estimator(contexts)
+            treatments = treatments.flatten()
+            effects = effects.repeat(10)
+            mu_pred, sigma_pred = self.effect_estimator(contexts)
 
-            mu_pred = mu_pred.gather(0, treatments)
-            sigma_pred = sigma_pred.gather(0, treatments)
+            mu_pred = mu_pred.gather(0, treatments[None])
+            sigma_pred = sigma_pred.gather(0, treatments[None])
+            sigma_pred += 1e-3 # avoid numerical errors
 
             bs = contexts.size(0)
 
-            sigma_mat_pred = torch.zeros(bs)
-            sigma_mat_pred[torch.eye(bs)] = sigma_pred
+            sigma_mat_pred = torch.eye(bs) 
+            sigma_mat_pred[torch.arange(bs), torch.arange(bs)] = sigma_pred
 
             loss = -distributions.MultivariateNormal(mu_pred, sigma_mat_pred).log_prob(effects).mean()
             loss.backward()
@@ -144,7 +149,7 @@ class CmnistBanditAgent:
         for e in range(n_epochs):
             logger.info(f'[{e}] starting training ...')
             self.train_once()
-            logger.info(f'[{e}] training finished; loss is at: [{self.history.loss:.4f}]')
+            logger.info(f'[{e}] training finished; loss is at: [{self.history.loss[-1]:.4f}]')
         
     def choose(self, timestep: Timestep):
         uncertaitnties = self.calculate_uncertainties(timestep.context)
