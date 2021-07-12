@@ -68,6 +68,7 @@ class CausalMnistBanditsEnv(gym.Env):
         self.config = config
 
         self.action_space = spaces.Discrete(self.config.num_arms + 1)
+        self.noop = self.config.num_arms + 1
 
         self.observation_space = spaces.Box(0, 122, (self.config.num_arms, 28, 28) ) # what about the other arms observation
 
@@ -124,7 +125,7 @@ class CausalMnistBanditsEnv(gym.Env):
         diag_vars = torch.zeros(len(self.current_timestep.treatments))
         diag_vars[torch.eye(len(self.current_timestep.treatments))] = reward_variances
 
-        reward = distributions.MultivariateNormal(reward_mean, reward_variances).sample()
+        reward = distributions.MultivariateNormal(reward_mean, reward_variances).sample() # not the only way to generate reward
 
         # generate new tiemstep
         self.current_timestep = self._make_timestep(self.current_timestep.id + 1)

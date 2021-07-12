@@ -1,1 +1,2 @@
-from causal_env.envs.causal_mnist import CausalMnistBanditsConfig, CausalMnistBanditsEnv, Timestep
+from causal_env.envs.causal_mnist import CausalMnistBanditsConfig, CausalMnistBanditsEnv
+from causal_env.envs.causal_mnist import Timestep, TimestepDataset
