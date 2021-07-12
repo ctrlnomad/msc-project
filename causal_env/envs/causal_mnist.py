@@ -2,7 +2,7 @@ import gym
 import gym.spaces as spaces
 import numpy as np
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch 
 import torchvision
@@ -16,15 +16,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CausalMnistBanditsConfig:
-    num_arms: int
-    causal_arms: int
+    num_arms: int = 10
+    causal_arms: int = 4
 
-    num_ts: int
+    num_ts: int = 100_000
 
 @dataclass
 class Timestep:
     info: Any = None
-    context: torch.Tensor = None
+    context: torch.Tensor = field(repr=False, default=None)
     treatments: torch.Tensor = None
     reward: float = None
     done: bool = False
@@ -32,22 +32,18 @@ class Timestep:
 
 class TimestepDataset(trchdata.Dataset):
 
-    def __init__(self, dataset: Timestep) -> None:
+    def __init__(self, dataset: List[Timestep]) -> None:
         super().__init__()
         self.dataset = dataset
-    
-    @classmethod
-    def build(memory: List[Timestep]):
-        dataset = Timestep(*zip(memory))
-        return TimestepDataset(dataset)
 
-    def __get_item___(self, i):
-        return self.dataset.context[i], \
-            self.dataset.treatments[i], \
-            self.dataset.reward[i]
+    def __getitem__(self, i):
+        ts = self.dataset[i]
+        return ts.context, \
+                ts.treatments, \
+                ts.reward
 
     def __len__(self):
-        return len(self.dataset.rewards)
+        return len(self.dataset)
 
 class CausalMnistBanditsEnv(gym.Env):
     """
@@ -58,28 +54,27 @@ class CausalMnistBanditsEnv(gym.Env):
 
     The agent can intervene by selecting to pull an arm or choose to do nothing. 
     The other arms are set to 0,1 depending on a biased coin flip. 
-    TODO:
-        - ITE is x_1 * a - x_2
-        - option for non-stationary variance 
     """
+
     def init(self, config: CausalMnistBanditsConfig) -> None:
         super().__init__()
 
         self.config = config
 
-        self.action_space = spaces.Discrete(self.config.num_arms + 1)
-        self.noop = self.config.num_arms + 1
+        self.action_space = spaces.Discrete(self.config.num_arms * 2 + 1)
+        self.noop = self.config.num_arms*2
 
         self.observation_space = spaces.Box(0, 122, (self.config.num_arms, 28, 28) ) # what about the other arms observation
 
-        self.default_probs = np.random.rand(self.config.num_arms)
+        self.default_probs = torch.rand(self.config.num_arms)
+        self.default_dist = distributions.Bernoulli(probs=self.default_probs)
     
         causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
 
 
-        self.ite = np.zeros(2, config.num_arms) 
-        self.ite[:, causal_ids] = np.random.rand(2, self.config.causal_arms)*2-1
-        self.variance = np.random.rand(2, config.num_arms) * 2
+        self.ite = torch.zeros((2, config.num_arms))
+        self.ite[:, causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
+        self.variance = torch.rand((2, self.config.num_arms))*2
 
         self.mnist_dataset = torchvision.datasets.MNIST('./data/mnist', train=True, download=True,
                              transform=torchvision.transforms.Compose([
@@ -102,8 +97,8 @@ class CausalMnistBanditsEnv(gym.Env):
     def _make_timestep(self, tsid) -> Any:
         ts = Timestep()
         ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
-        ts.context = torch.stack([self.sample_mnist(n) for n in ts.context]).squeeze()
-        ts.treatments = (self.default_probs > np.random.rand(self.config.num_arms)) * 1
+        ts.context = torch.stack([self.sample_mnist(n) for n in ts.info])
+        ts.treatments = self.default_dist.sample().long()
         ts.done = tsid >= self.config.num_ts
         ts.id = tsid
         return ts
@@ -116,26 +111,26 @@ class CausalMnistBanditsEnv(gym.Env):
     def step(self, action) -> Timestep:
         assert self.action_space.contains(action)
 
-        if action != self.config.num_arms:
-            self.current_timestep.treatments[action] = 1
-        
-        reward_mean = self.ite[self.current_timestep.treatments, :]
-        reward_variances = self.variances[self.current_timestep.treatments, :]
+        if action != self.noop:
+            intervention = self.config.num_arms - action > 0
+            self.current_timestep.treatments[action] = int(intervention)
 
-        diag_vars = torch.zeros(len(self.current_timestep.treatments))
-        diag_vars[torch.eye(len(self.current_timestep.treatments))] = reward_variances
+        reward_mean = self.ite.gather(0, self.current_timestep.treatments[None])
+        reward_variances = self.variance.gather(0, self.current_timestep.treatments[None])
 
-        reward = distributions.MultivariateNormal(reward_mean, reward_variances).sample() # not the only way to generate reward
+        n = len(self.current_timestep.treatments)
+        diag_vars = torch.eye(n)
+
+        diag_vars[torch.arange(n), torch.arange(n)] = reward_variances
+
+        reward = distributions.MultivariateNormal(reward_mean, diag_vars).sample().sum() # not the only way to generate reward
 
         # generate new tiemstep
+        old_timestep = self.current_timestep
+        old_timestep.reward = reward
         self.current_timestep = self._make_timestep(self.current_timestep.id + 1)
-        self.current_timestep.reward = reward
 
-        return self.current_timestep 
-
-
-
-
+        return old_timestep, self.current_timestep 
 
 class MetaCausalMnistBanditsEnv(gym.Env):
     pass

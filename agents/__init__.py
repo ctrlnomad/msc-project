@@ -1,1 +1,1 @@
-from agents.mnist_agent import MnistBanditAgent, AgentConfig
+from agents.mnist_agent import CmnistBanditAgent, AgentConfig
