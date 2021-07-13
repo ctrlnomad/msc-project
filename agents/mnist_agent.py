@@ -5,13 +5,14 @@ from collections import deque
 
 import torch
 import torch.nn as nn
+from torch.nn.modules import utils
 import torch.optim as optim
 
 from torch.utils.data import DataLoader
 import torch.distributions as distributions
 
 from causal_env.envs import Timestep, TimestepDataset
-
+import utils
 import logging
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class BayesianConvNet(nn.Module):
             nn.ReLU()
         )
 
-    def forward(self, x):
+    def forward(self, x, add_delta=True):
         x = self.conv_block(x)
         x = x.view(-1, 320)
 
@@ -54,7 +55,10 @@ class BayesianConvNet(nn.Module):
         mu_pred = self.mu_theta(emb)
         sigma_pred = self.sigma_theta(emb)
 
-        return mu_pred.T, sigma_pred.T
+        if add_delta:
+            sigma_pred += 1e-3 # avoid numerical errors
+
+        return mu_pred, sigma_pred
         
 
     def compute_uncertainty(self, x,  n_samples):
@@ -117,16 +121,12 @@ class CmnistBanditAgent:
             contexts =contexts.view(-1, *self.config.dim_in)
             treatments = treatments.flatten()
             effects = effects.repeat(10)
-            mu_pred, sigma_pred = self.effect_estimator(contexts)
+            mu_pred, sigma_pred = self.effect_estimator(contexts, add_delta=True)
 
             mu_pred = mu_pred.gather(0, treatments[None])
             sigma_pred = sigma_pred.gather(0, treatments[None])
-            sigma_pred += 1e-3 # avoid numerical errors
 
-            bs = contexts.size(0)
-
-            sigma_mat_pred = torch.eye(bs) 
-            sigma_mat_pred[torch.arange(bs), torch.arange(bs)] = sigma_pred
+            sigma_mat_pred = utils.to_diag_var(sigma_pred)
 
             loss = -distributions.MultivariateNormal(mu_pred, sigma_mat_pred).log_prob(effects).mean()
             loss.backward()

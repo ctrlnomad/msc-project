@@ -7,6 +7,7 @@ import causal_env
 from causal_env.envs import CausalMnistBanditsConfig
 
 import argparse
+from argparse_dataclass import ArgumentParser
 
 SEED = 8888
 
@@ -19,15 +20,8 @@ if __name__ == '__main__':
     mnist_env = gym.make('CausalMnistBanditsEnv-v0')
     mnist_env.init(config)
     
-    obs = mnist_env.reset()
-    done = False
+    timestep = mnist_env.reset()
 
-    while not done:
-        print('new step')
+    while not timestep.done:
         action = mnist_env.action_space.sample()
-        ctx, reward, done, treatments = mnist_env.step(action)
-
-        print(config)
-        print(mnist_env.digit_ITEs)
-        print(ctx.shape)
-        break
+        timestep = mnist_env.step(action)

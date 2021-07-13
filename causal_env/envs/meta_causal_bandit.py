@@ -4,7 +4,6 @@ import numpy as np
 
 from dataclasses import dataclass
 
-
 @dataclass
 class MetaCausalBanditsConfig:
     episode_len: int

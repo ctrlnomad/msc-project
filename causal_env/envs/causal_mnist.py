@@ -10,6 +10,8 @@ import torch.distributions as distributions
 import torch.utils.data as trchdata
 from typing import Any, Sequence, Tuple, Dict, List
 
+from utils.timestep import Timestep
+import utils 
 
 import logging
 logger = logging.getLogger(__name__)
@@ -20,30 +22,6 @@ class CausalMnistBanditsConfig:
     causal_arms: int = 4
 
     num_ts: int = 100_000
-
-@dataclass
-class Timestep:
-    info: Any = None
-    context: torch.Tensor = field(repr=False, default=None)
-    treatments: torch.Tensor = None
-    reward: float = None
-    done: bool = False
-    id: int = None
-
-class TimestepDataset(trchdata.Dataset):
-
-    def __init__(self, dataset: List[Timestep]) -> None:
-        super().__init__()
-        self.dataset = dataset
-
-    def __getitem__(self, i):
-        ts = self.dataset[i]
-        return ts.context, \
-                ts.treatments, \
-                ts.reward
-
-    def __len__(self):
-        return len(self.dataset)
 
 class CausalMnistBanditsEnv(gym.Env):
     """
@@ -69,11 +47,11 @@ class CausalMnistBanditsEnv(gym.Env):
         self.default_probs = torch.rand(self.config.num_arms)
         self.default_dist = distributions.Bernoulli(probs=self.default_probs)
     
-        causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
+        self.causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
 
 
         self.ite = torch.zeros((2, config.num_arms))
-        self.ite[:, causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
+        self.ite[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
         self.variance = torch.rand((2, self.config.num_arms))*2
 
         self.mnist_dataset = torchvision.datasets.MNIST('./data/mnist', train=True, download=True,
@@ -118,10 +96,7 @@ class CausalMnistBanditsEnv(gym.Env):
         reward_mean = self.ite.gather(0, self.current_timestep.treatments[None])
         reward_variances = self.variance.gather(0, self.current_timestep.treatments[None])
 
-        n = len(self.current_timestep.treatments)
-        diag_vars = torch.eye(n)
-
-        diag_vars[torch.arange(n), torch.arange(n)] = reward_variances
+        diag_vars = utils.to_diag_var(reward_variances)
 
         reward = distributions.MultivariateNormal(reward_mean, diag_vars).sample().sum() # not the only way to generate reward
 
@@ -130,7 +105,29 @@ class CausalMnistBanditsEnv(gym.Env):
         old_timestep.reward = reward
         self.current_timestep = self._make_timestep(self.current_timestep.id + 1)
 
+        logger.info(f'[{timestep.id}] timestep: \n\t{old_timestep}')
         return old_timestep, self.current_timestep 
+
+    def compute_kl(self, agent):
+        # sample each digit
+        contexts = torch.stack([self.sample_mnist(n) for n in range(self.config.num_arms)])
+
+        mu_pred, sigma_pred = agent.effect_estimator(contexts)
+
+        mu_pred = mu_pred.ravel()
+        sigma_pred = sigma_pred.ravel() # TODO: check with supervisors
+
+        mu_true = self.ite.ravel()
+        sigma_true = self.variance.ravel()
+
+        pred_dist = distributions.MultivariateNormal(mu_pred, sigma_pred)
+        true_dist = distributions.MultivariateNormal(mu_true, sigma_true)
+
+        kl = distributions.kl_divergence(true_dist, pred_dist)
+        return kl.mean().item() # possibly 
+
+    def compute_regret(self):
+        pass # TODO
 
 class MetaCausalMnistBanditsEnv(gym.Env):
     pass
