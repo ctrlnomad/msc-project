@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     fig = vis.plot_loss()
     fig.show()
-    fig = vis.plot_uncerstainty()
+    fig = vis.plot_uncertainty()
     fig.show()
     fig = vis.plot_kl()
     fig.show()

@@ -38,7 +38,7 @@ class CausalMnistBanditsEnv(gym.Env):
 
         self.config = config
 
-        self.action_space = spaces.Discrete(self.config.num_arms * 2 + 1)
+        self.action_space = spaces.Discrete(self.config.num_arms * 2 + 1) # REMAKE
         self.noop = self.config.num_arms*2
 
         self.observation_space = spaces.Box(0, 122, (self.config.num_arms, 28, 28) ) # what about the other arms observation
@@ -89,8 +89,9 @@ class CausalMnistBanditsEnv(gym.Env):
         assert self.action_space.contains(action)
 
         if action != self.noop:
-            intervention = self.config.num_arms - action > 0
-            self.current_timestep.treatments[action] = int(intervention)
+            arm_id = self.config.num_arms - action - 1
+            intervention = arm_id > 0
+            self.current_timestep.treatments[abs(arm_id)] = int(intervention)
 
         reward_mean = self.ite.gather(0, self.current_timestep.treatments[None]).squeeze()
         reward_variances = self.variance.gather(0, self.current_timestep.treatments[None]).ravel()
@@ -112,7 +113,6 @@ class CausalMnistBanditsEnv(gym.Env):
         contexts = torch.stack([self.sample_mnist(n) for n in range(self.config.num_arms)])
 
         mu_pred, sigma_pred = agent.effect_estimator(contexts)
-        print(mu_pred.shape, sigma_pred.shape, sigma_pred.ravel().shape)
 
         mu_pred = mu_pred.ravel()
         sigma_pred = utils.to_diag_var(sigma_pred.ravel()) # TODO: check with supervisors
