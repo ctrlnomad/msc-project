@@ -7,11 +7,10 @@ from dataclasses import dataclass, field
 import torch 
 import torchvision
 import torch.distributions as distributions
-import torch.utils.data as trchdata
-from typing import Any, Sequence, Tuple, Dict, List
+from typing import Any, List
 
-from utils.timestep import Timestep
-import utils 
+from causal_env.envs.timestep import Timestep
+import utils
 
 import logging
 logger = logging.getLogger(__name__)
@@ -93,8 +92,8 @@ class CausalMnistBanditsEnv(gym.Env):
             intervention = self.config.num_arms - action > 0
             self.current_timestep.treatments[action] = int(intervention)
 
-        reward_mean = self.ite.gather(0, self.current_timestep.treatments[None])
-        reward_variances = self.variance.gather(0, self.current_timestep.treatments[None])
+        reward_mean = self.ite.gather(0, self.current_timestep.treatments[None]).squeeze()
+        reward_variances = self.variance.gather(0, self.current_timestep.treatments[None]).ravel()
 
         diag_vars = utils.to_diag_var(reward_variances)
 
@@ -105,7 +104,7 @@ class CausalMnistBanditsEnv(gym.Env):
         old_timestep.reward = reward
         self.current_timestep = self._make_timestep(self.current_timestep.id + 1)
 
-        logger.info(f'[{timestep.id}] timestep: \n\t{old_timestep}')
+        logger.info(f'[{old_timestep.id}] timestep: \n\t{old_timestep}')
         return old_timestep, self.current_timestep 
 
     def compute_kl(self, agent):
@@ -113,21 +112,25 @@ class CausalMnistBanditsEnv(gym.Env):
         contexts = torch.stack([self.sample_mnist(n) for n in range(self.config.num_arms)])
 
         mu_pred, sigma_pred = agent.effect_estimator(contexts)
+        print(mu_pred.shape, sigma_pred.shape, sigma_pred.ravel().shape)
 
         mu_pred = mu_pred.ravel()
-        sigma_pred = sigma_pred.ravel() # TODO: check with supervisors
+        sigma_pred = utils.to_diag_var(sigma_pred.ravel()) # TODO: check with supervisors
 
         mu_true = self.ite.ravel()
-        sigma_true = self.variance.ravel()
-
+        sigma_true = utils.to_diag_var(self.variance.ravel())
+        
         pred_dist = distributions.MultivariateNormal(mu_pred, sigma_pred)
         true_dist = distributions.MultivariateNormal(mu_true, sigma_true)
 
         kl = distributions.kl_divergence(true_dist, pred_dist)
         return kl.mean().item() # possibly 
 
-    def compute_regret(self):
-        pass # TODO
+    def compute_regret(self, agent):
+        # arm, treatment
+        # return self.ite.max() - self.ite[treatment, arm]
+        return 0
+        
 
 class MetaCausalMnistBanditsEnv(gym.Env):
     pass

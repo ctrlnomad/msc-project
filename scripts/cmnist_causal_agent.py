@@ -6,7 +6,7 @@ from causal_env.envs import CausalMnistBanditsConfig
 from agents import CmnistBanditAgent, AgentConfig
 from argparse_dataclass import ArgumentParser
 
-from utils import Vis
+from utils.vis import Vis
 import logging
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
                      datefmt='%m/%d %I:%M:%S %p',  
@@ -55,9 +55,14 @@ if __name__ == '__main__':
 
         
 
-    # env.vis.plot_loss()
-    # env.vis.plot_kl()
-    # env.vis.plot_uncerstainty()
+    fig = vis.plot_loss()
+    fig.show()
+    fig = vis.plot_uncerstainty()
+    fig.show()
+    fig = vis.plot_kl()
+    fig.show()
+    fig = vis.plot_regret()
+    fig.show()
     
 
 

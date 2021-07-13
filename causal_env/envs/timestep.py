@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from typing import Any, List
+import torch
 import torch.utils.data as trchdata
-
 
 
 @dataclass

@@ -2,6 +2,7 @@ from typing import Tuple, List
 from dataclasses import dataclass, field
 import numpy as np
 from collections import deque
+from numpy.core.fromnumeric import nonzero
 
 import torch
 import torch.nn as nn
@@ -108,7 +109,7 @@ class CmnistBanditAgent:
         dataset = TimestepDataset(self.memory)
         loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
 
-        opt = optim.Adam(self.effect_estimator.parameters())
+        opt = optim.Adam(self.effect_estimator.parameters(),lr=3e-4)
 
         for contexts, treatments, effects in loader:
             opt.zero_grad()
@@ -123,12 +124,11 @@ class CmnistBanditAgent:
             effects = effects.repeat(10)
             mu_pred, sigma_pred = self.effect_estimator(contexts, add_delta=True)
 
-            mu_pred = mu_pred.gather(0, treatments[None])
-            sigma_pred = sigma_pred.gather(0, treatments[None])
+            mu_pred = mu_pred.gather(0, treatments[None].T)
+            sigma_pred = sigma_pred.gather(0, treatments[None].T)
 
             sigma_mat_pred = utils.to_diag_var(sigma_pred)
-
-            loss = -distributions.MultivariateNormal(mu_pred, sigma_mat_pred).log_prob(effects).mean()
+            loss = -distributions.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
             loss.backward()
             opt.step()
 
@@ -137,6 +137,10 @@ class CmnistBanditAgent:
     def calculate_uncertainties(self, contexts: torch.Tensor):
         variances = self.effect_estimator.compute_uncertainty(contexts, self.config.mc_samples)
         return variances 
+
+    def compute_distirbutions(self, contexts: torch.Tensor):
+        mu_pred, sigma_pred = self.effect_estimator(contexts)
+        return mu_pred.argmax()
 
     def observe(self, timestep: Timestep):
         self.memory.append(timestep)
@@ -153,9 +157,8 @@ class CmnistBanditAgent:
         
     def choose(self, timestep: Timestep):
         uncertaitnties = self.calculate_uncertainties(timestep.context)
-        intervetion = uncertaitnties.argmax()
-        # variances are [bs, treatment]
-
-        return intervetion 
+        loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
+        intervention = loc[0] + len(timestep.context)* loc[1]
+        return intervention.item()
     
     
