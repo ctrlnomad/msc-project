@@ -3,6 +3,7 @@ import gym.spaces as spaces
 import numpy as np
 
 from dataclasses import dataclass, field
+from numpy.core.fromnumeric import nonzero
 
 import torch 
 import torchvision
@@ -38,7 +39,7 @@ class CausalMnistBanditsEnv(gym.Env):
 
         self.config = config
 
-        self.action_space = spaces.Discrete(self.config.num_arms * 2 + 1) # REMAKE
+        self.action_space = spaces.Discrete(self.config.num_arms * 2 + 1)
         self.noop = self.config.num_arms*2
 
         self.observation_space = spaces.Box(0, 122, (self.config.num_arms, 28, 28) ) # what about the other arms observation
@@ -81,17 +82,17 @@ class CausalMnistBanditsEnv(gym.Env):
         return ts
 
 
-    def seed(self, seed: int) -> List[int]:
+    def seed(self, seed: int):
         np.random.seed(seed)
         torch.random.manual_seed(seed)
 
     def step(self, action) -> Timestep:
         assert self.action_space.contains(action)
-
-        if action != self.noop:
-            arm_id = self.config.num_arms - action - 1
-            intervention = arm_id > 0
-            self.current_timestep.treatments[abs(arm_id)] = int(intervention)
+        logger.info(f'recieved action with id [{action}] [noop={action ==self.noop}]')
+        if action != self.noop: 
+            arm_id = action - self.config.num_arms if action >= self.config.num_arms else action
+            intervention = arm_id > self.config.num_arms
+            self.current_timestep.treatments[arm_id] = int(intervention)
 
         reward_mean = self.ite.gather(0, self.current_timestep.treatments[None]).squeeze()
         reward_variances = self.variance.gather(0, self.current_timestep.treatments[None]).ravel()
@@ -124,13 +125,13 @@ class CausalMnistBanditsEnv(gym.Env):
         true_dist = distributions.MultivariateNormal(mu_true, sigma_true)
 
         kl = distributions.kl_divergence(true_dist, pred_dist)
-        return kl.mean().item() # possibly 
+        return kl.mean().item()
 
     def compute_regret(self, agent):
-        # arm, treatment
-        # return self.ite.max() - self.ite[treatment, arm]
-        return 0
-        
+        contexts = torch.stack([self.sample_mnist(n) for n in range(self.config.num_arms)])
+        mu_pred, _ = agent.effect_estimator(contexts)
 
-class MetaCausalMnistBanditsEnv(gym.Env):
-    pass
+        mu_pred = mu_pred.reshape(2, self.config.num_arms).detach().cpu()
+        treatment, arm = (mu_pred.max() == mu_pred).nonzero()[0]
+        regret = (self.ite.max() - self.ite[treatment, arm])
+        return regret.item()

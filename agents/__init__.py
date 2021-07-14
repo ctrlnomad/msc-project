@@ -1,1 +1,3 @@
-from agents.mnist_agent import CmnistBanditAgent, AgentConfig
+from agents.proba_agent import VariationalAgent, VariationalAgentConfig
+from agents.causal_agent import CausalAgent, CausalAgentConfig
+

@@ -71,14 +71,15 @@ class BayesianConvNet(nn.Module):
         return result.var(dim=-1) # Var[E[Y | X]]
 
 @dataclass
-class AgentConfig:
+class CausalAgentConfig:
     dim_in: Tuple[int] = (1, 28, 28)
     memsize: int = 100_000
     mc_samples: int = 100
 
-    do_nothing: float = 0.5 # do nothing for this proportion of steps
+    do_nothing: float = 0.5 
     cuda: bool = False
     batch_size:int =32
+
 
 
 @dataclass
@@ -86,13 +87,9 @@ class History:
     loss: List[float] = field(default_factory=list)
 
 
-class CmnistBanditAgent:
-    """
-    half the round we learn by empty interventions
-    the other times we learn by choosing based on epsitemic uncertainty
-    we evaluate by regret. 
-    """
-    def __init__(self, config: AgentConfig):
+class CausalAgent:
+
+    def __init__(self, config: CausalAgentConfig, causal_model: List[int]):
         # learning is the ITE of causal arms
         self.memory = deque(maxlen=config.memsize)
 
@@ -100,10 +97,14 @@ class CmnistBanditAgent:
         self.config = config
 
         self.history = History()
+
+        self.causal_model = causal_model
         
         if self.config.cuda:
             self.effect_estimator.cuda()
 
+    def decounfound(self):
+        pass
 
     def train_once(self, ):
         dataset = TimestepDataset(self.memory)

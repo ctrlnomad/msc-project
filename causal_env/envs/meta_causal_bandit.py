@@ -15,7 +15,7 @@ class MetaCausalBanditsConfig:
 
 
 class MetaCausalBanditsEnv(gym.Env):
-    def __init__(self, config: MetaCausalBanditConfig):
+    def __init__(self, config: MetaCausalBanditsConfig):
         self.config = config
         self.action_space = spaces.MultiBinary(self.config.total_arms)
 

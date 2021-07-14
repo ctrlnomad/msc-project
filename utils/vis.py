@@ -1,33 +1,43 @@
 from dataclasses import dataclass, field
-import plotly.express as px
-import plotly.graph_objects as go
+
+import matplotlib.pyplot as plt
+from numpy.core.arrayprint import TimedeltaFormat
+import seaborn as sns
+import pandas as pd
+
+sns.set_style()
 
 import torch
 
 from causal_env.envs import CausalMnistBanditsEnv
+from causal_env.envs import Timestep
 from agents.mnist_agent import CmnistBanditAgent
 
 from typing import Dict, List
-from collections import defaultdict
+from collections import defaultdict, namedtuple
+
+from pathlib import Path
+
+@dataclass
+class _Metric:
+    x: List[int] = field(default_factory=list)
+    y: List[float] = field(default_factory=list)
 @dataclass
 class _Telemetry:
     causal_model : List[int]
     
-    kl: List[float] = field(default_factory=list)
-    nll: List[float]= field(default_factory=list)
-    regret: List[float]= field(default_factory=list)
-    treatment_uncertainty: Dict = field(default_factory=lambda: defaultdict(list))
-    no_treatment_uncertainty: Dict = field(default_factory=lambda: defaultdict(list))
+    kl: List[float] = field(default_factory=_Metric)
+    nll: List[float]= field(default_factory=_Metric)
+    regret: List[float]= field(default_factory=_Metric)
+    treatment_uncertainty: Dict = field(default_factory=lambda: defaultdict(_Metric))
+    no_treatment_uncertainty: Dict = field(default_factory=lambda: defaultdict(_Metric))
 
-
-    def __len__(self):
-        return len(self.nll)
 
 class Vis:
     def __init__(self, causal_model:  List[int]) -> None:
         self.store = _Telemetry(causal_model=causal_model)
     
-    def collect(self, agent: CmnistBanditAgent, env:CausalMnistBanditsEnv):
+    def collect(self, agent: CmnistBanditAgent, env:CausalMnistBanditsEnv, timestep: Timestep):
         
         # at some point I am going to have to compute this for baseline agents and other agents
 
@@ -36,54 +46,77 @@ class Vis:
         uncertainty = uncertainty.detach().cpu().numpy()
 
         for n in range(env.config.num_arms):
-            self.store.no_treatment_uncertainty[n].append(uncertainty[n, 0].item())
-            self.store.treatment_uncertainty[n].append(uncertainty[n, 1].item())
+            self.store.no_treatment_uncertainty[n].y.append(uncertainty[n, 0].item())
+            self.store.treatment_uncertainty[n].y.append(uncertainty[n, 1].item())
+
+            self.store.treatment_uncertainty[n].x.append(timestep.id)
+            self.store.no_treatment_uncertainty[n].x.append(timestep.id)
 
         if agent.history.loss:
             loss = agent.history.loss[-1] 
-            self.store.nll.append(loss)
+            self.store.nll.y.append(loss)
+            self.store.nll.x.append(timestep.id)
 
         kl = env.compute_kl(agent)
+        self.store.kl.y.append(kl)
+        self.store.kl.x.append(timestep.id)
+
         regret = env.compute_regret(agent)
-
-        self.store.kl.append(kl)
-        self.store.regret.append(regret)
-
-    def plot_loss(self, title='Negative Log-Likelihood'):
-        fig = px.line(y = self.store.nll, x = list(range(len(self.store))), title=title)
-        return fig
-
-    def plot_uncertainty(self):
-        treatment_fig = go.Figure()
-        arms = len(self.store.treatment_uncertainty.keys())
-        x = list(range(len(self.store)))
-
-        for arm in range(arms):
-            ys = self.store.treatment_uncertainty[arm]
-            treatment_fig.add_trace(go.Scatter(x=x, y=ys,
-                                name=f'Arm #{arm} (causal={arm in self.store.causal_model})',
-                                mode='lines+markers'))
-        no_treatment_fig = go.Figure()
-        arms = len(self.store.treatment_uncertainty.keys())
-        x = list(range(len(self.store)))
-
-        for arm in range(arms):
-            ys = self.store.no_treatment_uncertainty[arm]
-            no_treatment_fig.add_trace(go.Scatter(x=x, y=ys,
-                                name=f'Arm #{arm} (causal={arm in self.store.causal_model})',
-                                mode='lines+markers'))
+        self.store.regret.y.append(regret)
+        self.store.regret.x.append(timestep.id)
         
-        treatment_fig.update_layout(title='Epistemic Uncerstainty for Treatment')
-        no_treatment_fig.update_layout(title='Epistemic Uncerstainty for No Treatment')
-
+    def plot_uncertainty(self):
+        plt.figure()
+        for k, v in self.store.treatment_uncertainty.items():
+            args = {
+                 'label':f'arm #{k}'
+            }
+            if k in self.store.causal_model:
+                args['linestyle'] = 'dashed'
+            plt.plot(v.x, v.y, **args)
+        
+        plt.legend()
+        plt.title('Treatment Uncertainty')
+        treatment_fig = plt.gcf() 
+        plt.figure()
+        for k, v in self.store.no_treatment_uncertainty.items():
+            args = {
+                'label':f'arm #{k}'
+            }
+            if k in self.store.causal_model:
+                args['linestyle'] = 'dashed'
+            plt.plot(v.x,v.y, **args)
+        plt.legend()
+        plt.title('No Treatment Uncertainty')
+        no_treatment_fig = plt.gcf() 
         return treatment_fig, no_treatment_fig
 
+    def plot_loss(self, title='Negative Log-Likelihood'):
+        plt.figure()
+        ax = sns.lineplot(y = self.store.nll.y, x = self.store.nll.x)
+        ax.set_title(title)
+        return ax
+
     def plot_kl(self, title='KL-divergence'):
-        fig = px.line(y = self.store.kl, x = list(range(len(self.store))), title=title)
-        return fig
+        plt.figure()
+        ax = sns.lineplot(y = self.store.kl.y, x = self.store.kl.x)
+        ax.set_title(title)
+        return ax
 
     def plot_regret(self, title='Agent Regret'):
-        fig = px.line(y = self.store.regret, x = list(range(len(self.store))), title=title)
-        return fig
+        plt.figure()
+        ax = sns.lineplot(y = self.store.regret.y, x = self.store.regret.x)
+        ax.set_title(title)
+        return ax
 
-    
+    def save_plots(self, path):
+        p = Path(path)
+        p.mkdir(exist_ok=True)
+        
+        self.plot_loss().figure.savefig(p / "loss_plot .png")
+        self.plot_kl().figure.savefig(p / "kl_plot .png")
+        self.plot_regret().figure.savefig(p / "regret_plot .png")
+
+        treatment_fig, no_treatment_fig = self.plot_uncertainty()
+        treatment_fig.savefig(p / '1_uncertainty_plot.png')
+        no_treatment_fig.savefig(p / '0_uncertainty_plot.png')
