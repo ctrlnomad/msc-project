@@ -3,7 +3,6 @@ import gym.spaces as spaces
 import numpy as np
 
 from dataclasses import dataclass, field
-from numpy.core.fromnumeric import nonzero
 
 import torch 
 import torchvision
@@ -12,6 +11,7 @@ from typing import Any, List
 
 from causal_env.envs.timestep import Timestep
 import utils
+import utils.mnist as mnist
 
 import logging
 logger = logging.getLogger(__name__)
@@ -48,25 +48,19 @@ class CausalMnistBanditsEnv(gym.Env):
         self.default_dist = distributions.Bernoulli(probs=self.default_probs)
     
         self.causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
-
+        
+        self.causal_model = torch.zeros(self.config.num_arms)
+        self.causal_model[self.causal_ids] = 1
 
         self.ite = torch.zeros((2, config.num_arms))
         self.ite[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
         self.variance = torch.rand((2, self.config.num_arms))*2
 
-        self.mnist_dataset = torchvision.datasets.MNIST('./data/mnist', train=True, download=True,
-                             transform=torchvision.transforms.Compose([
-                               torchvision.transforms.ToTensor(),
-                             ]))
+        self.mnist_sampler = mnist.MnistSampler()
+
         self.seed(config.seed)
         logger.info('environment inited')
         self._inited = True
-
-    def sample_mnist(self, num):
-        # samples an image of num from the MNIST dataset
-        idxs = (self.mnist_dataset.targets == num).nonzero(as_tuple=True)[0]
-        idx = np.random.choice(idxs)
-        return self.mnist_dataset[idx][0] # return just the image tensor
 
     def reset(self) -> Any:
         self.current_timestep = self._make_timestep(1)
@@ -75,7 +69,7 @@ class CausalMnistBanditsEnv(gym.Env):
     def _make_timestep(self, tsid) -> Any:
         ts = Timestep()
         ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
-        ts.context = torch.stack([self.sample_mnist(n) for n in ts.info])
+        ts.context = torch.stack([self.mnist_sampler.sample(n) for n in ts.info])
         ts.treatments = self.default_dist.sample().long()
         ts.done = tsid >= self.config.num_ts
         ts.id = tsid
@@ -111,7 +105,7 @@ class CausalMnistBanditsEnv(gym.Env):
 
     def compute_kl(self, agent):
         # sample each digit
-        contexts = torch.stack([self.sample_mnist(n) for n in range(self.config.num_arms)])
+        contexts = torch.stack([self.mnist_sampler.sample(n) for n in range(self.config.num_arms)])
 
         mu_pred, sigma_pred = agent.effect_estimator(contexts)
 
@@ -128,10 +122,11 @@ class CausalMnistBanditsEnv(gym.Env):
         return kl.mean().item()
 
     def compute_regret(self, agent):
-        contexts = torch.stack([self.sample_mnist(n) for n in range(self.config.num_arms)])
+        contexts = torch.stack([self.mnist_sampler.sample(n) for n in range(self.config.num_arms)])
         mu_pred, _ = agent.effect_estimator(contexts)
 
         mu_pred = mu_pred.reshape(2, self.config.num_arms).detach().cpu()
         treatment, arm = (mu_pred.max() == mu_pred).nonzero()[0]
         regret = (self.ite.max() - self.ite[treatment, arm])
         return regret.item()
+

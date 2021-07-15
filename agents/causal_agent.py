@@ -14,6 +14,8 @@ import torch.distributions as distributions
 
 from causal_env.envs import Timestep, TimestepDataset
 import utils
+import utils.mnist as mnist
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -98,15 +100,39 @@ class CausalAgent:
 
         self.history = History()
 
-        self.causal_model = causal_model
-        
+        self.causal_model = torch.Tensor(causal_model).long()
+        self.causal_ids = self.causal_model.nonzero().squeeze()
+        print(self.causal_ids)
         if self.config.cuda:
             self.effect_estimator.cuda()
 
-    def decounfound(self):
-        pass
+        self.mnist_sampler = mnist.MnistSampler()
 
-    def train_once(self, ):
+
+    def decounfound(self, contexts, treatments,  effects):
+        with torch.no_grad():
+            causal_treatments = treatments.index_select(dim=1, index=self.causal_ids)
+            bs = len(contexts)
+
+            confounding_contexts = contexts.index_select(dim=1, index=self.causal_ids).view(-1, *self.config.dim_in)
+            mu_pred, _ = self.effect_estimator(confounding_contexts)
+            mu_pred = mu_pred.view(bs, -1, 2)
+            # we know how many causal effects there are 4 in this case
+            num_causal_arms = len(self.causal_ids)
+            deconfounded_effects  = torch.zeros(bs, num_causal_arms)
+
+            mu_pred = mu_pred.gather(-1, causal_treatments[...,None]).squeeze()
+            for i in range(bs):
+                deconfounded_effects[i] = effects[i] - (mu_pred[i].sum() - mu_pred[i])
+
+            deconfounded_effects = deconfounded_effects.flatten()
+            causal_treatments = causal_treatments.flatten()
+
+            return confounding_contexts,causal_treatments, deconfounded_effects
+
+
+
+    def train_once(self):
         dataset = TimestepDataset(self.memory)
         loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
 
@@ -119,10 +145,7 @@ class CausalAgent:
             effects = effects.cuda() if self.config.cuda else effects
             treatments = treatments.cuda() if self.config.cuda else treatments
             
-            # contextsss reshape bbbbbb
-            contexts =contexts.view(-1, *self.config.dim_in)
-            treatments = treatments.flatten()
-            effects = effects.repeat(10)
+            contexts, treatments, effects = self.decounfound(contexts, treatments, effects)
             mu_pred, sigma_pred = self.effect_estimator(contexts, add_delta=True)
 
             mu_pred = mu_pred.gather(0, treatments[None].T)
@@ -133,7 +156,7 @@ class CausalAgent:
             loss.backward()
             opt.step()
 
-            self.history.loss.append(loss.item()) # better way of doing this tho
+            self.history.loss.append(loss.item()) 
 
     def calculate_uncertainties(self, contexts: torch.Tensor):
         variances = self.effect_estimator.compute_uncertainty(contexts, self.config.mc_samples)

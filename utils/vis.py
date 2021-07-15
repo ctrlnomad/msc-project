@@ -11,12 +11,13 @@ import torch
 
 from causal_env.envs import CausalMnistBanditsEnv
 from causal_env.envs import Timestep
-from agents.mnist_agent import CmnistBanditAgent
+from agents.proba_agent import VariationalAgent
 
 from typing import Dict, List
 from collections import defaultdict, namedtuple
 
 from pathlib import Path
+from utils.mnist import MnistSampler
 
 @dataclass
 class _Metric:
@@ -26,22 +27,29 @@ class _Metric:
 class _Telemetry:
     causal_model : List[int]
     
-    kl: List[float] = field(default_factory=_Metric)
-    nll: List[float]= field(default_factory=_Metric)
-    regret: List[float]= field(default_factory=_Metric)
-    treatment_uncertainty: Dict = field(default_factory=lambda: defaultdict(_Metric))
-    no_treatment_uncertainty: Dict = field(default_factory=lambda: defaultdict(_Metric))
+    kl: _Metric = field(default_factory=_Metric)
+    nll: _Metric = field(default_factory=_Metric)
+    regret: _Metric = field(default_factory=_Metric)
 
+    treatment_uncertainty: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
+    no_treatment_uncertainty: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
+
+    variances: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
+    means: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
+
+    rewards: _Metric = field(default_factory=_Metric)
+    action_frequency: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
 
 class Vis:
     def __init__(self, causal_model:  List[int]) -> None:
         self.store = _Telemetry(causal_model=causal_model)
+        self.sampler = MnistSampler()
     
-    def collect(self, agent: CmnistBanditAgent, env:CausalMnistBanditsEnv, timestep: Timestep):
+    def collect(self, agent: VariationalAgent, env:CausalMnistBanditsEnv, timestep: Timestep):
         
         # at some point I am going to have to compute this for baseline agents and other agents
 
-        contexts = torch.stack([env.sample_mnist(n) for n in range(env.config.num_arms)])
+        contexts = torch.stack([self.sampler.sample(n) for n in range(env.config.num_arms)])
         uncertainty = agent.calculate_uncertainties(contexts) # cuda???
         uncertainty = uncertainty.detach().cpu().numpy()
 
@@ -64,7 +72,7 @@ class Vis:
         regret = env.compute_regret(agent)
         self.store.regret.y.append(regret)
         self.store.regret.x.append(timestep.id)
-        
+
     def plot_uncertainty(self):
         plt.figure()
         for k, v in self.store.treatment_uncertainty.items():
@@ -113,9 +121,9 @@ class Vis:
         p = Path(path)
         p.mkdir(exist_ok=True)
         
-        self.plot_loss().figure.savefig(p / "loss_plot .png")
-        self.plot_kl().figure.savefig(p / "kl_plot .png")
-        self.plot_regret().figure.savefig(p / "regret_plot .png")
+        self.plot_loss().figure.savefig(p / "loss_plot.png")
+        self.plot_kl().figure.savefig(p / "kl_plot.png")
+        self.plot_regret().figure.savefig(p / "regret_plot.png")
 
         treatment_fig, no_treatment_fig = self.plot_uncertainty()
         treatment_fig.savefig(p / '1_uncertainty_plot.png')
