@@ -26,6 +26,13 @@ from utils.mnist import MnistSampler
 class _Metric:
     x: List[int] = field(default_factory=list)
     y: List[float] = field(default_factory=list)
+
+    def plot(self, title=''):
+        plt.figure()
+        ax = sns.lineplot(y = self.y, x = self.x)
+        ax.set_title(title)
+        return ax.figure
+
 @dataclass
 class _GeneralTelemetry:
     kl: _Metric = field(default_factory=_Metric)
@@ -37,24 +44,38 @@ class _GeneralTelemetry:
 
 
 @dataclass
-class _SpecificTelemetry:
-    path: Path # each telemetry object is like a directory inside of the figure folder
+class _SpecificTelemetry: # each telemetry object is like a directory inside of the figure folder
     causal_model : List[int]
 
     uncertainty: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
     variance: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
     means: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
 
+    def plot_dict_metric(self, data:  Dict[int, _Metric], title=''):
+        plt.figure()
+        for k, v in data.items():
+            args = {
+                 'label':f'arm #{k}'
+            }
+            if k in self.causal_model:
+                args['linestyle'] = 'dashed'
+            plt.plot(v.x, v.y, **args)
+        
+        plt.legend()
+        plt.title(title)
+        fig = plt.gcf() 
+        return fig
+
 
 class Vis:
     def __init__(self, path: str, causal_model:  List[int]) -> None: # different telemetries?? like general and specific
-        path = Path(path)
-        path.mkdir(exist_ok=True)
-        
+        self.path = Path(path)
+        self.path.mkdir(exist_ok=True)
+
         self.store = _GeneralTelemetry()
 
-        self.treatment_store = _SpecificTelemetry(path / 'treatment',  causal_model)
-        self.no_treatment_store = _SpecificTelemetry(path / 'no_treatment',  causal_model)
+        self.treatment_store = _SpecificTelemetry(causal_model)
+        self.no_treatment_store = _SpecificTelemetry(causal_model)
 
         self.sampler = MnistSampler()
     
@@ -120,32 +141,31 @@ class Vis:
         no_treatment_fig = plt.gcf() 
         return treatment_fig, no_treatment_fig
 
-    def plot_loss(self, title='Negative Log-Likelihood'):
-        plt.figure()
-        ax = sns.lineplot(y = self.store.nll.y, x = self.store.nll.x)
-        ax.set_title(title)
-        return ax
+    def save_plots(self):
+        self.store.nll.plot('Negative Log-Likelihood').savefig(self.path / "loss_plot.png")
+        self.store.kl.plot('KL-divergence').savefig(self.path / "kl_plot.png")
+        self.store.regret.plot('Agent Regret').savefig(self.path / "regret_plot.png")
 
-    def plot_kl(self, title='KL-divergence'):
-        plt.figure()
-        ax = sns.lineplot(y = self.store.kl.y, x = self.store.kl.x)
-        ax.set_title(title)
-        return ax
+        no_treatment_path = self.path / 'no_treatment' 
+        no_treatment_path.mkdir(exist_ok=True)
 
-    def plot_regret(self, title='Agent Regret'):
-        plt.figure()
-        ax = sns.lineplot(y = self.store.regret.y, x = self.store.regret.x)
-        ax.set_title(title)
-        return ax
+        f = self.no_treatment_store.plot_dict_metric(self.no_treatment_store.uncertainty)
+        f.savefig(no_treatment_path / 'uncertainty_plot.png')
 
-    def save_plots(self, path):
-        p = Path(path)
-        p.mkdir(exist_ok=True)
-        
-        self.plot_loss().figure.savefig(p / "loss_plot.png")
-        self.plot_kl().figure.savefig(p / "kl_plot.png")
-        self.plot_regret().figure.savefig(p / "regret_plot.png")
+        f = self.no_treatment_store.plot_dict_metric(self.no_treatment_store.means)
+        f.savefig(no_treatment_path / 'means_plot.png')
 
-        treatment_fig, no_treatment_fig = self.plot_uncertainty()
-        treatment_fig.savefig(p / '1_uncertainty_plot.png')
-        no_treatment_fig.savefig(p / '0_uncertainty_plot.png')
+        f = self.no_treatment_store.plot_dict_metric(self.no_treatment_store.variace)
+        f.savefig(no_treatment_path / 'variace_plot.png')
+
+        treatment_path = self.path / 'treatment' 
+        treatment_path.mkdir(exist_ok=True)
+
+        f = self.treatment_store.plot_dict_metric(self.treatment_store.uncertainty)
+        f.savefig(treatment_path / 'uncertainty_plot.png')
+
+        f = self.treatment_store.plot_dict_metric(self.treatment_store.means)
+        f.savefig(treatment_path / 'means_plot.png')
+
+        f = self.treatment_store.plot_dict_metric(self.treatment_store.variace)
+        f.savefig(treatment_path / 'variace_plot.png')
