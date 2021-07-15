@@ -38,7 +38,7 @@ if __name__ == '__main__':
     logger.info(config)
 
     agent = CausalAgent(config, mnist_env.causal_model)
-    vis = Vis(mnist_env.causal_ids)
+    vis = Vis(config.figure_dir, mnist_env.causal_ids) # should support None path??? or nah
 
     timestep = mnist_env.reset()
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
         # mnist_env.compute_kl(agent)
         if config.num_ts * config.do_nothing < timestep.id:
-            op = agent.choose(timestep)
+            op = agent.act(timestep)
         else:
             op = mnist_env.noop
 

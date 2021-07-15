@@ -56,7 +56,8 @@ class CausalMnistBanditsEnv(gym.Env):
         self.ite[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
         self.variance = torch.rand((2, self.config.num_arms))*2
 
-        self.mnist_sampler = mnist.MnistSampler()
+        self.digit_sampler = mnist.MnistSampler()
+        self.digit_contexts = self.digit_sampler.sample_array(self.config.num_arms)
 
         self.seed(config.seed)
         logger.info('environment inited')
@@ -69,7 +70,7 @@ class CausalMnistBanditsEnv(gym.Env):
     def _make_timestep(self, tsid) -> Any:
         ts = Timestep()
         ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
-        ts.context = torch.stack([self.mnist_sampler.sample(n) for n in ts.info])
+        ts.context = torch.stack([self.digit_sampler.sample(n) for n in ts.info])
         ts.treatments = self.default_dist.sample().long()
         ts.done = tsid >= self.config.num_ts
         ts.id = tsid
@@ -83,6 +84,7 @@ class CausalMnistBanditsEnv(gym.Env):
     def step(self, action) -> Timestep:
         assert self.action_space.contains(action)
         logger.info(f'recieved action with id [{action}] [noop={action ==self.noop}]')
+
         if action != self.noop: 
             arm_id = action - self.config.num_arms if action >= self.config.num_arms else action
             intervention = arm_id > self.config.num_arms
@@ -105,9 +107,7 @@ class CausalMnistBanditsEnv(gym.Env):
 
     def compute_kl(self, agent):
         # sample each digit
-        contexts = torch.stack([self.mnist_sampler.sample(n) for n in range(self.config.num_arms)])
-
-        mu_pred, sigma_pred = agent.effect_estimator(contexts)
+        mu_pred, sigma_pred = agent.effect_estimator(self.digit_contexts)
 
         mu_pred = mu_pred.ravel()
         sigma_pred = utils.to_diag_var(sigma_pred.ravel()) # TODO: check with supervisors
@@ -122,7 +122,7 @@ class CausalMnistBanditsEnv(gym.Env):
         return kl.mean().item()
 
     def compute_regret(self, agent):
-        contexts = torch.stack([self.mnist_sampler.sample(n) for n in range(self.config.num_arms)])
+        contexts = torch.stack([self.digit_sampler.sample(n) for n in range(self.config.num_arms)])
         mu_pred, _ = agent.effect_estimator(contexts)
 
         mu_pred = mu_pred.reshape(2, self.config.num_arms).detach().cpu()

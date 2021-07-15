@@ -13,7 +13,11 @@ from torch.utils.data import DataLoader
 import torch.distributions as distributions
 
 from causal_env.envs import Timestep, TimestepDataset
+from agents.base_agent import BaseAgent
+
 import utils
+import utils.mnist 
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -46,7 +50,7 @@ class BayesianConvNet(nn.Module):
         self.sigma_theta = nn.Sequential(
             nn.Linear(25, 2), 
             nn.ReLU()
-        )
+        ) # this is a bit clapped, ask in the meeting tomorrow TODO
 
     def forward(self, x, add_delta=True):
         x = self.conv_block(x)
@@ -78,7 +82,7 @@ class VariationalAgentConfig:
 
     do_nothing: float = 0.5 # do nothing for this proportion of steps
     cuda: bool = False
-    batch_size:int =32
+    batch_size:int = 32
 
 
 @dataclass
@@ -86,7 +90,7 @@ class History:
     loss: List[float] = field(default_factory=list)
 
 
-class VariationalAgent:
+class VariationalAgent(BaseAgent):
     """
     half the round we learn by empty interventions
     the other times we learn by choosing based on epsitemic uncertainty
@@ -100,11 +104,31 @@ class VariationalAgent:
         self.config = config
 
         self.history = History()
+        self.digit_sampler = utils.mnist.MnistSampler()
         
         if self.config.cuda:
             self.effect_estimator.cuda()
 
+    def observe(self, timestep: Timestep):
+        self.memory.append(timestep)
 
+    def train(self, n_epochs:int=1):
+        if len(self.memory) <= self.config.batch_size:
+            logger.info('agent not training, not enough data')
+            return 
+
+        for e in range(n_epochs):
+            logger.info(f'[{e}] starting training ...')
+            self.train_once()
+            logger.info(f'[{e}] training finished; loss is at: [{self.history.loss[-1]:.4f}]')
+        
+    def act(self, timestep: Timestep):
+        uncertaitnties = self.compute_digit_uncertainties(timestep.context)
+        loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
+        intervention = loc[0] + len(timestep.context)* loc[1]
+        return intervention.item()
+    
+    
     def train_once(self, ):
         dataset = TimestepDataset(self.memory)
         loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
@@ -134,31 +158,13 @@ class VariationalAgent:
 
             self.history.loss.append(loss.item()) # better way of doing this tho
 
-    def calculate_uncertainties(self, contexts: torch.Tensor):
+    def compute_digit_uncertainties(self, contexts: torch.Tensor):
         variances = self.effect_estimator.compute_uncertainty(contexts, self.config.mc_samples)
         return variances 
 
-    def compute_distirbutions(self, contexts: torch.Tensor):
-        mu_pred, sigma_pred = self.effect_estimator(contexts)
-        return mu_pred.argmax()
+    def compute_digit_distributions(self, contexts: torch.Tensor):
+        return self.effect_estimator(contexts)
 
-    def observe(self, timestep: Timestep):
-        self.memory.append(timestep)
-
-    def train(self, n_epochs:int=1):
-        if len(self.memory) <= self.config.batch_size:
-            logger.info('agent not training, not enough data')
-            return 
-
-        for e in range(n_epochs):
-            logger.info(f'[{e}] starting training ...')
-            self.train_once()
-            logger.info(f'[{e}] training finished; loss is at: [{self.history.loss[-1]:.4f}]')
-        
-    def choose(self, timestep: Timestep):
-        uncertaitnties = self.calculate_uncertainties(timestep.context)
-        loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
-        intervention = loc[0] + len(timestep.context)* loc[1]
-        return intervention.item()
-    
-    
+    def compute_best_action(self, contexts: torch.Tensor):
+        mu, _ = self.effect_estimator(contexts)
+        return (mu.max() == mu).nonzero().squeeze()

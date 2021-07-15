@@ -108,8 +108,29 @@ class CausalAgent:
 
         self.mnist_sampler = mnist.MnistSampler()
 
+    def observe(self, timestep: Timestep):
+        self.memory.append(timestep)
+
+    def train(self, n_epochs:int=1):
+        if len(self.memory) <= self.config.batch_size:
+            logger.info('agent not training, not enough data')
+            return 
+
+        for e in range(n_epochs):
+            logger.info(f'[{e}] starting training ...')
+            self.train_once()
+            logger.info(f'[{e}] training finished; loss is at: [{self.history.loss[-1]:.4f}]')
+        
+    def act(self, timestep: Timestep):
+        uncertaitnties = self.compute_uncertainties(timestep.context)
+        loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
+        intervention = loc[0] + len(timestep.context)* loc[1]
+        return intervention.item()
+    
+    
 
     def decounfound(self, contexts, treatments,  effects):
+        """our agent bootstraps"""
         with torch.no_grad():
             causal_treatments = treatments.index_select(dim=1, index=self.causal_ids)
             bs = len(contexts)
@@ -158,31 +179,17 @@ class CausalAgent:
 
             self.history.loss.append(loss.item()) 
 
-    def calculate_uncertainties(self, contexts: torch.Tensor):
+    def compute_digit_uncertainties(self, contexts: torch.Tensor) -> np.ndarray:
         variances = self.effect_estimator.compute_uncertainty(contexts, self.config.mc_samples)
-        return variances 
+        return variances.detach().cpu().numpy()
 
-    def compute_distirbutions(self, contexts: torch.Tensor):
-        mu_pred, sigma_pred = self.effect_estimator(contexts)
-        return mu_pred.argmax()
+    def compute_digit_distributions(self, contexts: torch.Tensor)-> np.ndarray:
+        mu, sigma = self.effect_estimator(contexts)
+        mu = mu.detach().cpu().numpy()
+        sigma = sigma.detach().cpu().numpy()
+        return mu, sigma
 
-    def observe(self, timestep: Timestep):
-        self.memory.append(timestep)
+    def compute_best_action(self, contexts: torch.Tensor)-> np.ndarray:
+        mu, _ = self.effect_estimator(contexts)
+        return (mu.max() == mu).nonzero().squeeze().detach().cpu().numpy()
 
-    def train(self, n_epochs:int=1):
-        if len(self.memory) <= self.config.batch_size:
-            logger.info('agent not training, not enough data')
-            return 
-
-        for e in range(n_epochs):
-            logger.info(f'[{e}] starting training ...')
-            self.train_once()
-            logger.info(f'[{e}] training finished; loss is at: [{self.history.loss[-1]:.4f}]')
-        
-    def choose(self, timestep: Timestep):
-        uncertaitnties = self.calculate_uncertainties(timestep.context)
-        loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
-        intervention = loc[0] + len(timestep.context)* loc[1]
-        return intervention.item()
-    
-    

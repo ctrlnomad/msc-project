@@ -24,6 +24,7 @@ class Options(CausalMnistBanditsConfig, VariationalAgentConfig):
   log_file: str = None
   figure_dir: str = None
 
+  telemetry_every: int = 1 
 
 
 
@@ -37,18 +38,19 @@ if __name__ == '__main__':
     logger.info(config)
 
     agent = VariationalAgent(config)
-    vis = Vis(mnist_env.causal_ids)
+    vis = Vis(config.figure_dir, mnist_env.causal_ids)
 
     timestep = mnist_env.reset()
 
     while not timestep.done:
 
         # collect telemetry
-        vis.collect(agent, mnist_env, timestep)
+        if timestep.id % config.telemetry_every == 0:
+            vis.collect(agent, mnist_env, timestep)
 
         # mnist_env.compute_kl(agent)
         if config.num_ts * config.do_nothing < timestep.id:
-            op = agent.choose(timestep)
+            op = agent.act(timestep)
         else:
             op = mnist_env.noop
 
@@ -59,6 +61,9 @@ if __name__ == '__main__':
         
     if config.figure_dir:
         vis.save_plots(config.figure_dir)
+
+
+    
 
 
     

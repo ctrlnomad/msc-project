@@ -1,9 +1,12 @@
+from genericpath import exists
+from agents.proba_agent import VariationalAgentConfig
 from dataclasses import dataclass, field
 
 import matplotlib.pyplot as plt
 from numpy.core.arrayprint import TimedeltaFormat
 import seaborn as sns
 import pandas as pd
+from torch.utils import data
 
 sns.set_style()
 
@@ -11,7 +14,7 @@ import torch
 
 from causal_env.envs import CausalMnistBanditsEnv
 from causal_env.envs import Timestep
-from agents.proba_agent import VariationalAgent
+from agents.base_agent import BaseAgent
 
 from typing import Dict, List
 from collections import defaultdict, namedtuple
@@ -24,41 +27,59 @@ class _Metric:
     x: List[int] = field(default_factory=list)
     y: List[float] = field(default_factory=list)
 @dataclass
-class _Telemetry:
-    causal_model : List[int]
-    
+class _GeneralTelemetry:
     kl: _Metric = field(default_factory=_Metric)
     nll: _Metric = field(default_factory=_Metric)
     regret: _Metric = field(default_factory=_Metric)
 
-    treatment_uncertainty: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
-    no_treatment_uncertainty: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
-
-    variances: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
-    means: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
-
     rewards: _Metric = field(default_factory=_Metric)
     action_frequency: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
 
+
+@dataclass
+class _SpecificTelemetry:
+    path: Path # each telemetry object is like a directory inside of the figure folder
+    causal_model : List[int]
+
+    uncertainty: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
+    variance: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
+    means: Dict[int, _Metric] = field(default_factory=lambda: defaultdict(_Metric))
+
+
 class Vis:
-    def __init__(self, causal_model:  List[int]) -> None:
-        self.store = _Telemetry(causal_model=causal_model)
+    def __init__(self, path: str, causal_model:  List[int]) -> None: # different telemetries?? like general and specific
+        path = Path(path)
+        path.mkdir(exist_ok=True)
+        
+        self.store = _GeneralTelemetry()
+
+        self.treatment_store = _SpecificTelemetry(path / 'treatment',  causal_model)
+        self.no_treatment_store = _SpecificTelemetry(path / 'no_treatment',  causal_model)
+
         self.sampler = MnistSampler()
     
-    def collect(self, agent: VariationalAgent, env:CausalMnistBanditsEnv, timestep: Timestep):
-        
-        # at some point I am going to have to compute this for baseline agents and other agents
-
-        contexts = torch.stack([self.sampler.sample(n) for n in range(env.config.num_arms)])
-        uncertainty = agent.calculate_uncertainties(contexts) # cuda???
-        uncertainty = uncertainty.detach().cpu().numpy()
+    def collect(self, agent: BaseAgent, env:CausalMnistBanditsEnv, timestep: Timestep):
+        means, variances = agent.compute_digit_distributions(env.digit_contexts)
+        uncertainty = agent.compute_digit_uncertainties(env.digit_contexts)
 
         for n in range(env.config.num_arms):
-            self.store.no_treatment_uncertainty[n].y.append(uncertainty[n, 0].item())
-            self.store.treatment_uncertainty[n].y.append(uncertainty[n, 1].item())
+            self.no_treatment_store.uncertainty[n].y.append(uncertainty[n, 0])
+            self.treatment_store.uncertainty[n].y.append(uncertainty[n, 1])
 
-            self.store.treatment_uncertainty[n].x.append(timestep.id)
-            self.store.no_treatment_uncertainty[n].x.append(timestep.id)
+            self.no_treatment_store.uncertainty[n].x.append(timestep.id)
+            self.treatment_store.uncertainty[n].x.append(timestep.id)
+
+            self.no_treatment_store.variance[n].y.append(variances[n, 0])
+            self.treatment_store.variance[n].y.append(variances[n, 1])
+
+            self.no_treatment_store.variance[n].x.append(timestep.id)
+            self.treatment_store.variance[n].x.append(timestep.id)
+
+            self.no_treatment_store.means[n].y.append(variances[n, 0])
+            self.treatment_store.means[n].y.append(variances[n, 1])
+
+            self.no_treatment_store.means[n].x.append(timestep.id)
+            self.treatment_store.means[n].x.append(timestep.id)
 
         if agent.history.loss:
             loss = agent.history.loss[-1] 
