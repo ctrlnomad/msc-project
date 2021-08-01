@@ -27,10 +27,16 @@ class Options(CausalMnistBanditsConfig, VariationalAgentConfig):
   telemetry_every: int = 1 
 
 
+import agents.uncertainty_estimators.estimators as estimators
+import agents.uncertainty_estimators.arches as arches
 
 if __name__ == '__main__':
     parser = ArgumentParser(Options)
     config = parser.parse_args()
+
+    config.Arch = arches.ConvNet
+    config.Estimator = estimators.DropoutEstimator
+    logger.warn(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
     
     mnist_env = gym.make('CausalMnistBanditsEnv-v0')
     mnist_env.init(config)
@@ -60,7 +66,7 @@ if __name__ == '__main__':
 
         
     if config.figure_dir:
-        vis.save_plots(config.figure_dir)
+        vis.save_plots()
 
 
     

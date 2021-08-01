@@ -96,8 +96,8 @@ class Vis:
             self.no_treatment_store.variance[n].x.append(timestep.id)
             self.treatment_store.variance[n].x.append(timestep.id)
 
-            self.no_treatment_store.means[n].y.append(variances[n, 0])
-            self.treatment_store.means[n].y.append(variances[n, 1])
+            self.no_treatment_store.means[n].y.append(means[n, 0])
+            self.treatment_store.means[n].y.append(means[n, 1])
 
             self.no_treatment_store.means[n].x.append(timestep.id)
             self.treatment_store.means[n].x.append(timestep.id)
@@ -155,8 +155,8 @@ class Vis:
         f = self.no_treatment_store.plot_dict_metric(self.no_treatment_store.means)
         f.savefig(no_treatment_path / 'means_plot.png')
 
-        f = self.no_treatment_store.plot_dict_metric(self.no_treatment_store.variace)
-        f.savefig(no_treatment_path / 'variace_plot.png')
+        f = self.no_treatment_store.plot_dict_metric(self.no_treatment_store.variance)
+        f.savefig(no_treatment_path / 'variance_plot.png')
 
         treatment_path = self.path / 'treatment' 
         treatment_path.mkdir(exist_ok=True)
@@ -167,5 +167,5 @@ class Vis:
         f = self.treatment_store.plot_dict_metric(self.treatment_store.means)
         f.savefig(treatment_path / 'means_plot.png')
 
-        f = self.treatment_store.plot_dict_metric(self.treatment_store.variace)
-        f.savefig(treatment_path / 'variace_plot.png')
+        f = self.treatment_store.plot_dict_metric(self.treatment_store.variance)
+        f.savefig(treatment_path / 'variance_plot.png')

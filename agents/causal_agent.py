@@ -20,63 +20,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def mlp(inp):
-    return nn.Sequential(
-            nn.Linear(inp, 50),
-            nn.LeakyReLU(),
-            nn.Dropout(p=1/4),
-            nn.Linear(50, 25),
-            nn.LeakyReLU(),
-            nn.Dropout(p=1/4)
-        )
 
-class BayesianConvNet(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-        self.conv_block = nn.Sequential(
-            nn.Conv2d(1, 10, kernel_size=5),
-            nn.MaxPool2d(2),
-            nn.Dropout2d(),
-            nn.Conv2d(10, 20, kernel_size=5),
-            nn.MaxPool2d(2),
-        )
-
-        self.net = mlp(320)
-
-        self.mu_theta = nn.Linear(25, 2)
-        self.sigma_theta = nn.Sequential(
-            nn.Linear(25, 2), 
-            nn.ReLU()
-        )
-
-    def forward(self, x, add_delta=True):
-        x = self.conv_block(x)
-        x = x.view(-1, 320)
-
-        emb  = self.net(x)
-        mu_pred = self.mu_theta(emb)
-        sigma_pred = self.sigma_theta(emb)
-
-        if add_delta:
-            sigma_pred += 1e-3 # avoid numerical errors
-
-        return mu_pred, sigma_pred
-        
-
-    def compute_uncertainty(self, x,  n_samples):
-        # compute entropy with dropout
-        bs = len(x)
-        result = torch.zeros((bs, 2, n_samples)) # two for binary treatment
-        for i in range(n_samples):
-            result[..., i] = self(x)[0]
-        return result.var(dim=-1) # Var[E[Y | X]]
 
 @dataclass
 class CausalAgentConfig:
     dim_in: Tuple[int] = (1, 28, 28)
     memsize: int = 100_000
     mc_samples: int = 100
+    ensemble_size: int =100
 
     do_nothing: float = 0.5 
     cuda: bool = False
@@ -102,7 +53,7 @@ class CausalAgent:
 
         self.causal_model = torch.Tensor(causal_model).long()
         self.causal_ids = self.causal_model.nonzero().squeeze()
-        print(self.causal_ids)
+
         if self.config.cuda:
             self.effect_estimator.cuda()
 
@@ -122,15 +73,14 @@ class CausalAgent:
             logger.info(f'[{e}] training finished; loss is at: [{self.history.loss[-1]:.4f}]')
         
     def act(self, timestep: Timestep):
-        uncertaitnties = self.compute_uncertainties(timestep.context)
-        loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
+        uncertaitnties = self.compute_digit_uncertainties(timestep.context)
+        loc = (uncertaitnties.max() == uncertaitnties).nonzero()
         intervention = loc[0] + len(timestep.context)* loc[1]
         return intervention.item()
     
     
 
     def decounfound(self, contexts, treatments,  effects):
-        """our agent bootstraps"""
         with torch.no_grad():
             causal_treatments = treatments.index_select(dim=1, index=self.causal_ids)
             bs = len(contexts)

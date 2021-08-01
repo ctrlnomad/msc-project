@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
         
     if config.figure_dir:
-        vis.save_plots(config.figure_dir)
+        vis.save_plots()
 
 
     
