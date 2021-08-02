@@ -67,9 +67,12 @@ class VariationalAgent(BaseAgent):
             logger.info('agent not training, not enough data')
             return 
 
+        dataset = TimestepDataset(self.memory) # deconfound
+        loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
+
         for e in range(n_epochs):
             logger.info(f'[{e}] starting training ...')
-            losses = self.estimator.train()
+            losses = self.estimator.train(loader)
             logger.info(f'[{e}] training finished; loss is at: [{self.history.loss[-1]:.4f}]')
         
     def act(self, timestep: Timestep):
