@@ -3,7 +3,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from causal_env.envs import CausalMnistBanditsConfig
-from agents.baseline import BaseAgent, UCBSocket, GaussianThompsonSocket
+from agents.baseline import BaselineAgent, UCBSocket, GaussianThompsonSocket
 from argparse_dataclass import ArgumentParser
 
 from utils.tb_vis import TensorBoardVis
@@ -22,22 +22,23 @@ class Options(CausalMnistBanditsConfig):
   debug: bool = False
 
   log_file: str = None
-  figure_dir: str = None
 
+  telemetry_dir: str = None
   telemetry_every: int = 1 
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(Options)
     config = parser.parse_args()
-    socket = UCBSocket
+    socket = GaussianThompsonSocket
     logger.warn(f'FILE: {__name__} \n\trunning with Socket={socket} for T={config.num_ts}')
     
     mnist_env = gym.make('CausalMnistBanditsEnv-v0')
     mnist_env.init(config)
 
     logger.info(config)
-    agent = BaseAgent(mnist_env.action_space.shape, socket)
+
+    agent = BaselineAgent(mnist_env.action_space.n, socket)
     vis = TensorBoardVis(config)
 
     timestep = mnist_env.reset()

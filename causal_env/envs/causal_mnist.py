@@ -126,11 +126,11 @@ class CausalMnistBanditsEnv(gym.Env):
         return kl.mean().item()
 
     def compute_regret(self, agent):
-        contexts = torch.stack([self.digit_sampler.sample(n) for n in range(self.config.num_arms)])
-        mu_pred, _ = agent.effect_estimator(contexts)
+        best_action = agent.compute_best_action(self.digit_contexts)
 
-        mu_pred = mu_pred.reshape(2, self.config.num_arms).detach().cpu()
-        treatment, arm = (mu_pred.max() == mu_pred).nonzero()[0]
+        arm = best_action - self.config.num_arms if best_action >= self.config.num_arms else best_action
+        treatment = arm > self.config.num_arms
+
         regret = (self.ite.max() - self.ite[treatment, arm])
         return regret.item()
 

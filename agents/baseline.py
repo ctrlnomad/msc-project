@@ -4,6 +4,8 @@ import torch
 from agents.base_agent import BaseAgent
 from causal_env.envs.timestep import Timestep
 
+from  typing import Union
+
 
 # UCB and Thompson adapted fom https://github.com/WhatIThinkAbout
 def random_argmax(value_list):
@@ -38,14 +40,14 @@ class PowerSocket:
             
 class UCBSocket(PowerSocket):
 
-    def __init__( self, q, **kwargs ):    
+    def __init__( self, **kwargs ):    
         """ initialize the UCB socket """                  
         
         # store the confidence level controlling exploration
         self.confidence_level = kwargs.pop('confidence_level', 2.0)       
                 
         # pass the true reward value to the base PowerSocket   
-        super().__init__(q)           
+        super().__init__()           
         
     def uncertainty(self, t): 
         """ calculate the uncertainty in the estimate of this socket's mean """
@@ -62,9 +64,11 @@ class GaussianThompsonSocket(PowerSocket):
         self.sigma = 0.0001  # the posterior precision
         self.mu = 1       # the posterior mean
         
-        # pass the true reward value to the base PowerSocket             
+        # pass the true reward value to the base PowerSocket   
+        super().__init__()           
+          
         
-    def sample(self):
+    def sample(self, t):
         """ return a value from the the posterior normal distribution """
         return (np.random.randn() / np.sqrt(self.sigma)) + self.mu    
                     
@@ -79,9 +83,22 @@ class GaussianThompsonSocket(PowerSocket):
         self.sigma += 1 
     
 
+class RandomSocket:
+
+    def sample(self):
+        return self.Q
+
+    def update(self, r):
+        pass
+
+    @property
+    def Q(self):
+        return np.random.rand()
+
+        
 class BaselineAgent(BaseAgent):
     def __init__(self, num_actions: int, socket_cls: Union[GaussianThompsonSocket, UCBSocket]) -> None:
-        self.sockets = {i: socket_cls() for i in range(num_actions)}
+        self.sockets = [socket_cls() for i in range(num_actions-1)]
 
     def act(self, timestep: Timestep):
         qs = [s.sample(timestep.id) for s in self.sockets]
@@ -108,4 +125,4 @@ class BaselineAgent(BaseAgent):
             return None, None
             
     def compute_best_action(self, contexts: torch.Tensor):
-        return random_argmax([s.Q for  s in range(self.sockets)])
+        return random_argmax([s.Q for  s in self.sockets])
