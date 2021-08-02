@@ -3,12 +3,12 @@ import numpy as np
 from dataclasses import dataclass
 
 from causal_env.envs import CausalMnistBanditsConfig
-from agents.baseline import ThompsonAgent, UCBAgent
+from agents.baseline import BaseAgent, UCBSocket, GaussianThompsonSocket
 from argparse_dataclass import ArgumentParser
 
-import matplotlib.pyplot as plt
-from utils.vis import Vis
+from utils.tb_vis import TensorBoardVis
 import logging
+
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
                      datefmt='%m/%d %I:%M:%S %p',  
                      level=logging.DEBUG)
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Options(CausalMnistBanditsConfig, VariationalAgentConfig):
+class Options(CausalMnistBanditsConfig):
   seed: int = 5000
   debug: bool = False
 
@@ -30,16 +30,15 @@ class Options(CausalMnistBanditsConfig, VariationalAgentConfig):
 if __name__ == '__main__':
     parser = ArgumentParser(Options)
     config = parser.parse_args()
-
-    logger.warn(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
+    socket = UCBSocket
+    logger.warn(f'FILE: {__name__} \n\trunning with Socket={socket} for T={config.num_ts}')
     
     mnist_env = gym.make('CausalMnistBanditsEnv-v0')
     mnist_env.init(config)
 
     logger.info(config)
-
-    agent = UCBAgent()
-    vis = Vis(config.figure_dir, mnist_env.causal_ids)
+    agent = BaseAgent(mnist_env.action_space.shape, socket)
+    vis = TensorBoardVis(config)
 
     timestep = mnist_env.reset()
 
@@ -49,19 +48,11 @@ if __name__ == '__main__':
         if timestep.id % config.telemetry_every == 0:
             vis.collect(agent, mnist_env, timestep)
 
-        # mnist_env.compute_kl(agent)
-        if config.num_ts * config.do_nothing < timestep.id:
-            op = agent.act(timestep)
-        else:
-            op = mnist_env.noop
+        op = agent.act(timestep)
 
         old_timestep, timestep = mnist_env.step(op)
         agent.observe(old_timestep)
-        agent.train()
 
-        
-    if config.figure_dir:
-        vis.save_plots()
 
 
     

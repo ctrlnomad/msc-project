@@ -96,16 +96,16 @@ class BaselineAgent(BaseAgent):
 
     def compute_digit_uncertainties(self, contexts: torch.Tensor, t=None):
         if t and  hasattr(self.sockets[0], 'uncertainty'):
-            uncertainties = [s.uncertainty(t) for s in self.sockets]
+            uncertainties = torch.Tensor([s.uncertainty(t) for s in self.sockets])
             return uncertainties 
         else:
             return None
 
     def compute_digit_distributions(self, contexts: torch.Tensor):
         if hasattr(self.sockets[0], 'mu') and hasattr(self.sockets[0], 'sigma'):
-            return [s.mu for s in self.sockets],  [s.sigma for s in self.sockets], 
+            return torch.Tensor([s.mu for s in self.sockets]),  torch.Tensor([s.sigma for s in self.sockets])
         else:
-            return None
+            return None, None
             
     def compute_best_action(self, contexts: torch.Tensor):
         return random_argmax([s.Q for  s in range(self.sockets)])

@@ -38,6 +38,7 @@ class CausalMnistBanditsEnv(gym.Env):
         super().__init__()
 
         self.config = config
+        self.seed(config.seed)
 
         self.action_space = spaces.Discrete(self.config.num_arms * 2 + 1)
         self.noop = self.config.num_arms*2
@@ -57,11 +58,14 @@ class CausalMnistBanditsEnv(gym.Env):
         self.variance = torch.rand((2, self.config.num_arms))*2
 
         self.digit_sampler = mnist.MnistSampler()
-        self.digit_contexts = self.digit_sampler.sample_array(self.config.num_arms)
 
-        self.seed(config.seed)
         logger.info('environment inited')
         self._inited = True
+
+    @property
+    def digit_contexts(self):
+        return self.digit_sampler.sample_array(self.config.num_arms)
+
 
     def reset(self) -> Any:
         self.current_timestep = self._make_timestep(1)
