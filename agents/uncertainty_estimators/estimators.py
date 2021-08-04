@@ -38,8 +38,11 @@ class DropoutEstimator(BaseEstimator):
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
         # compute entropy with dropout
         bs = len(contexts)
-        result = torch.zeros((bs, 2, self.config.mc_samples)).to(config.device)
-        print(result.shape)
+        result = torch.zeros((bs, 2, self.config.mc_samples))
+        if self.config.cuda:
+            result = result.cuda()
+            contexts = contexts.cuda()
+
         for i in range(self.config.mc_samples):
             effects = self.net(contexts)[0]
             effects = torch.stack(effects).squeeze().T
@@ -60,7 +63,7 @@ class EnsembleEstimator(BaseEstimator):
         super().__init__(make, config)
         config.dropout_rate = 0 # TODO maybe set dropout to 0; check docs
         self.ensemble = [make(config) for _ in range(self.config.ensemble_size)]
-        
+
         if self.config.cuda:
             self.ensemble = [n.cuda() for n in self.ensemble]
 

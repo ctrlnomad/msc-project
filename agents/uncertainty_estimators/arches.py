@@ -118,7 +118,7 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         sigma_pred = sigma_pred.gather(-1, treatments[None])
 
         #sigma_mat_pred = utils.to_diag_var(torch.zeros_like(sigma_pred) + 1e-5)
-        sigma_mat_pred = utils.to_diag_var(sigma_pred)
+        sigma_mat_pred = utils.to_diag_var(sigma_pred, cuda=cuda)
         loss = -distributions.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
         loss.backward()
         opt.step()
