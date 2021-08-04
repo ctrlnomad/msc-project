@@ -85,7 +85,7 @@ class GaussianThompsonSocket(PowerSocket):
 
 class RandomSocket:
 
-    def sample(self):
+    def sample(self, t):
         return self.Q
 
     def update(self, r):

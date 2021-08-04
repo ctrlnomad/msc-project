@@ -28,13 +28,17 @@ class BaseEstimator:
 class DropoutEstimator(BaseEstimator):
     def __init__(self, make: Callable, config) -> None:
         super().__init__(make, config)
-        self.net = make(self.config)
+        self.net = make(self.config) 
+
+        if self.config.cuda:
+            self.net = self.net.cuda()
+
         self.opt = optim.Adam(self.net.parameters())
 
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
         # compute entropy with dropout
         bs = len(contexts)
-        result = torch.zeros((bs, 2, self.config.mc_samples)) 
+        result = torch.zeros((bs, 2, self.config.mc_samples)).to(config.device)
         print(result.shape)
         for i in range(self.config.mc_samples):
             effects = self.net(contexts)[0]
@@ -52,14 +56,20 @@ class DropoutEstimator(BaseEstimator):
 
 
 class EnsembleEstimator(BaseEstimator):
-    def __init__(self, make: Callable, config ) -> None: # TODO maybe set dropout to 0; check docs
+    def __init__(self, make: Callable, config ) -> None: 
         super().__init__(make, config)
+        config.dropout_rate = 0 # TODO maybe set dropout to 0; check docs
         self.ensemble = [make(config) for _ in range(self.config.ensemble_size)]
+        
+        if self.config.cuda:
+            self.ensemble = [n.cuda() for n in self.ensemble]
+
         self.opt_cls = optim.Adam
         self.opts = [self.opt_cls(n.parameters()) for n in self.ensemble]
         
 
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
+        contexts = contexts.cuda() if self.config.cuda else contexts
         results = [torch.stack(net(contexts)[0]) for net in self.ensemble] 
         results = torch.stack(results)
 

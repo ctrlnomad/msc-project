@@ -56,8 +56,6 @@ class VariationalAgent(BaseAgent):
 
         self.digit_sampler = utils.mnist.MnistSampler()
         
-        if self.config.cuda:
-            self.effect_estimator.cuda()
 
     def observe(self, timestep: Timestep):
         self.memory.append(timestep)

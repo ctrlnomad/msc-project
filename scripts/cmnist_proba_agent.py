@@ -52,7 +52,6 @@ if __name__ == '__main__':
 
     while not timestep.done:
 
-        # mnist_env.compute_kl(agent)
         if config.num_ts * config.do_nothing < timestep.id:
             op = agent.act(timestep)
         else:

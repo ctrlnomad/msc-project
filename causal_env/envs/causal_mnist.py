@@ -114,7 +114,7 @@ class CausalMnistBanditsEnv(gym.Env):
         mu_pred, sigma_pred = agent.effect_estimator(self.digit_contexts)
 
         mu_pred = mu_pred.ravel()
-        sigma_pred = utils.to_diag_var(sigma_pred.ravel()) # TODO: check with supervisors
+        sigma_pred = utils.to_diag_var(sigma_pred.ravel())
 
         mu_true = self.ite.ravel()
         sigma_true = utils.to_diag_var(self.variance.ravel())
