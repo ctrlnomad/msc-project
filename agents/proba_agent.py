@@ -27,13 +27,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class VariationalAgentConfig:
-    Arch: nn.Module
-    Estimator: estimators.BaseEstimator
+    Arch: nn.Module = None
+    Estimator: estimators.BaseEstimator = None
 
     dim_in: Tuple[int] = (1, 28, 28)
     memsize: int = 100_000
     mc_samples: int = 100
     ensemble_size: int = 100
+    dropout_rate: float = 0.5
 
     do_nothing: float = 0.5 # do nothing for this proportion of steps
     cuda: bool = False
@@ -50,8 +51,7 @@ class VariationalAgent(BaseAgent):
         # learning is the ITE of causal arms
         self.memory = deque(maxlen=config.memsize)
 
-        make = partial(config.Arch, config)
-        self.estimator = config.Estimator(make, config)
+        self.estimator = config.Estimator(config.Arch, config)
         self.config = config
 
         self.digit_sampler = utils.mnist.MnistSampler()
@@ -73,7 +73,7 @@ class VariationalAgent(BaseAgent):
         for e in range(n_epochs):
             logger.info(f'[{e}] starting training ...')
             losses = self.estimator.train(loader)
-            logger.info(f'[{e}] training finished; loss is at: [{self.history.loss[-1]:.4f}]')
+            logger.info(f'[{e}] training finished') # TODO  print losss
         
     def act(self, timestep: Timestep):
         uncertaitnties = self.compute_digit_uncertainties(timestep.context)
@@ -83,7 +83,7 @@ class VariationalAgent(BaseAgent):
     
 
     def compute_digit_uncertainties(self, contexts: torch.Tensor):
-        variances = self.estimator.compute_uncertainty(contexts, self.config.mc_samples)
+        variances = self.estimator.compute_uncertainty(contexts)
         return variances 
 
     def compute_digit_distributions(self, contexts: torch.Tensor):

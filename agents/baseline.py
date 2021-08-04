@@ -95,10 +95,14 @@ class RandomSocket:
     def Q(self):
         return np.random.rand()
 
-        
+
 class BaselineAgent(BaseAgent):
     def __init__(self, num_actions: int, socket_cls: Union[GaussianThompsonSocket, UCBSocket]) -> None:
         self.sockets = [socket_cls() for i in range(num_actions-1)]
+    
+    @property
+    def q_vals(self):
+        return [s.Q for  s in self.sockets]
 
     def act(self, timestep: Timestep):
         qs = [s.sample(timestep.id) for s in self.sockets]

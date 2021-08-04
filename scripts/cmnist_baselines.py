@@ -6,7 +6,7 @@ from causal_env.envs import CausalMnistBanditsConfig
 from agents.baseline import BaselineAgent, UCBSocket, GaussianThompsonSocket
 from argparse_dataclass import ArgumentParser
 
-from utils.tb_vis import TensorBoardVis
+from utils.tb_vis import TensorBoardVis, safenumpy
 import logging
 
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
@@ -45,21 +45,26 @@ if __name__ == '__main__':
 
     while not timestep.done:
 
-        # collect telemetry
-        if timestep.id % config.telemetry_every == 0:
-            vis.collect(agent, mnist_env, timestep)
+      # collect telemetry
+      if timestep.id % config.telemetry_every == 0:
+          vis.collect(agent, mnist_env, timestep)
+          vis.collect_arm_distributions(agent, mnist_env, timestep)
 
-        op = agent.act(timestep)
+      op = agent.act(timestep)
 
-        old_timestep, timestep = mnist_env.step(op)
-        agent.observe(old_timestep)
+      # Qs
+      #vis.writer.add_scalars
 
-
-
+      old_timestep, timestep = mnist_env.step(op)
+      agent.observe(old_timestep)
     
+    print('\n\n',mnist_env.ite, mnist_env.variance)
+    #vis.record_distributions(mnist_env, 'Once/Environment', mnist_env.ite, mnist_env.variance)
+    #vis.record_distributions(mnist_env, 'Once/Agent', *agent.compute_digit_distributions(mnist_env.digit_contexts))
 
 
-    
+
+  
 
 
 

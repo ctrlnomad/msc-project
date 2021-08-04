@@ -1,5 +1,7 @@
+import torch
 import torch.nn as nn
 import torch.distributions as distributions
+import torch.nn.functional as F
 
 import torchvision.models as models
 import utils
@@ -10,29 +12,27 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 class EffectNet(nn.Module):
-    def __init__(self, inp: int):
+    def __init__(self, inp: int, dropout_rate=1/2):
         super().__init__()
-
+        self.dropout_rate = dropout_rate
         self.emb = nn.Sequential(
             nn.Linear(inp, 25),
-            nn.LeakyReLU(),
+            nn.ELU(),
             nn.Dropout(p=self.dropout_rate))
             
         self.mu = nn.Linear(25, 1)
-        self.sigma = nn.Sequential(
-                nn.Linear(25, 1), 
-                nn.Softplus()
-            )
+        self.sigma = nn.Linear(25, 1)
 
     def forward(self, x):
         emb = self.emb(x)
-        return self.mu(emb),  self.sigma(emb)
+        # sigma = torch.log(1+torch.exp(self.sigma(emb)))
+        return self.mu(emb),  F.relu(self.sigma(emb))
 
 class ConvNet(nn.Module):
 
-    def __init__(self, dropout_rate=1/2):
+    def __init__(self, config):
         super().__init__()
-        self.dropout_rate = dropout_rate
+        self.dropout_rate = config.dropout_rate
         self.conv_block = nn.Sequential(
             nn.Conv2d(1, 10, kernel_size=5),
             nn.MaxPool2d(2),
@@ -43,8 +43,8 @@ class ConvNet(nn.Module):
             nn.Flatten()
         )
         
-        self.treat = EffectNet(320)
-        self.no_treat = EffectNet(320)
+        self.treat = EffectNet(320, dropout_rate=self.dropout_rate)
+        self.no_treat = EffectNet(320, dropout_rate=self.dropout_rate)
 
     def forward(self, x, add_delta=True):
         emb = self.conv_block(x)
@@ -109,11 +109,15 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         contexts =contexts.view(-1, *dim_in)
         treatments = treatments.flatten()
         effects = effects.repeat(10)
-        mu_pred, sigma_pred = model(contexts, add_delta=True) # TODO
+        mu_pred, sigma_pred = model(contexts, add_delta=True)
 
-        mu_pred = mu_pred.gather(0, treatments[None].T)
-        sigma_pred = sigma_pred.gather(0, treatments[None].T)
+        mu_pred = torch.stack(mu_pred).squeeze()
+        sigma_pred = torch.stack(sigma_pred).squeeze()
 
+        mu_pred = mu_pred.gather(-1, treatments[None])
+        sigma_pred = sigma_pred.gather(-1, treatments[None])
+
+        #sigma_mat_pred = utils.to_diag_var(torch.zeros_like(sigma_pred) + 1e-5)
         sigma_mat_pred = utils.to_diag_var(sigma_pred)
         loss = -distributions.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
         loss.backward()

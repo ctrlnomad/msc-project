@@ -1,12 +1,16 @@
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+import numpy as np
+from scipy.stats import norm
 
 from causal_env.envs import CausalMnistBanditsEnv
 from causal_env.envs import Timestep
 from agents.base_agent import BaseAgent
 
 
+def safenumpy(tensor) -> np.ndarray:
+    return tensor.detach().cpu().numpy()
 class TensorBoardVis:
     def __init__(self, config) -> None:
         self.config = config
@@ -18,7 +22,7 @@ class TensorBoardVis:
         unc = agent.compute_digit_uncertainties(env.digit_contexts, timestep.id)    
 
         if unc is not None:
-            unc = unc.view(env.config.num_arms, 2)
+            unc = safenumpy(unc.view(env.config.num_arms, 2))
             # transforming tensor to dict
             treat_unc = {f'arm #{i}': unc[i, 0] for i in range(env.config.num_arms)}
             no_treat_unc = {f'arm #{i}': unc[i, 0] for i in range(env.config.num_arms)}
@@ -26,28 +30,38 @@ class TensorBoardVis:
             self.writer.add_scalars('Treatment/uncertainty', tag_scalar_dict=treat_unc, global_step=timestep.id)
             self.writer.add_scalars('NoTreatment/uncertainty', tag_scalar_dict=no_treat_unc, global_step=timestep.id)
 
-        
-        means, variances = agent.compute_digit_distributions(env.digit_contexts)
-
-        if means is not None and variances is not None:
-            means = means.view(env.config.num_arms, 2)
-            variances = variances.view(env.config.num_arms, 2)
-
-            treat_means = {f'arm #{i}': means[i, 1] for i in range(env.config.num_arms)}
-            treat_vars = {f'arm #{i}': variances[i, 1] for i in range(env.config.num_arms)}
-
-            no_treat_means = {f'arm #{i}': means[i, 0] for i in range(env.config.num_arms)} 
-            no_treat_vars = {f'arm #{i}': variances[i, 0] for i in range(env.config.num_arms)}
-
-            self.writer.add_scalars('Treatment/means', tag_scalar_dict=treat_means, global_step=timestep.id)
-            self.writer.add_scalars('Treatment/variances', tag_scalar_dict=treat_vars, global_step=timestep.id)
-
-
-            self.writer.add_scalars('NoTreatment/means', tag_scalar_dict=no_treat_means, global_step=timestep.id)
-            self.writer.add_scalars('NoTreatment/variances', tag_scalar_dict=no_treat_vars, global_step=timestep.id)
-
-
         regret = env.compute_regret(agent)
         self.writer.add_scalar('General/Regret', regret , global_step=timestep.id)
 
-        # todo add add_histogram(tag, values, global)
+    def record_normal(self, tag, mean, variance, t):
+        self.writer.add_histogram(tag, self.unroll_norm(mean, variance), global_step=t)
+
+
+    @staticmethod
+    def unroll_norm(mu, sigma):
+        xs = np.linspace(-3, 3, num=200)
+        return norm.pdf(xs, mu, sigma)
+
+
+    def collect_arm_distributions(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
+        means, variances = agent.compute_digit_distributions(env.digit_contexts)
+        means = safenumpy(means.view(env.config.num_arms, 2))
+        variances = safenumpy(variances.view(env.config.num_arms, 2))
+
+        for i in range(env.config.num_arms):
+            mu, sigma = means[i, 1], variances[i, 1]
+            self.record_normal(f'Treatment Agent Distributions/arm #{i}', mu, sigma, timestep.id)
+
+            mu, sigma = means[i, 0], variances[i, 0]
+            self.record_normal(f'No Treatment Agent Distributions/arm #{i}', mu, sigma, timestep.id)
+
+    def record_distributions(self,env, parent_tag, means, variances):
+        means = safenumpy(means.view(env.config.num_arms, 2))
+        variances = safenumpy(variances.view(env.config.num_arms, 2))
+
+        for i in range(env.config.num_arms):
+            mu, sigma = means[i, 1], variances[i, 1]
+            self.record_normal(parent_tag + ' Treatment', mu, sigma, i)
+
+            mu, sigma = means[i, 0], variances[i, 0]
+            self.record_normal(parent_tag + ' No Treatment', mu, sigma, i)
