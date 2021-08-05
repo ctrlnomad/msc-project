@@ -89,4 +89,7 @@ class VariationalAgent(BaseAgent):
 
     def compute_best_action(self, contexts: torch.Tensor):
         mu, _ = self.estimator(contexts)
-        return (mu.max() == mu).nonzero().squeeze()
+        mu = torch.stack(mu).squeeze()
+        best_action = (mu.max() == mu).nonzero().squeeze()
+        print('wooo', best_action)
+        return best_action

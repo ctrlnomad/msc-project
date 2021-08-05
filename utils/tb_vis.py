@@ -8,9 +8,8 @@ from causal_env.envs import CausalMnistBanditsEnv
 from causal_env.envs import Timestep
 from agents.base_agent import BaseAgent
 
+from utils.misc import safenumpy
 
-def safenumpy(tensor) -> np.ndarray:
-    return tensor.detach().cpu().numpy()
 class TensorBoardVis:
     def __init__(self, config) -> None:
         self.config = config
@@ -19,7 +18,7 @@ class TensorBoardVis:
 
 
     def collect(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
-        unc = agent.compute_digit_uncertainties(env.digit_contexts, timestep.id)    
+        unc = agent.compute_digit_uncertainties(env.digit_contexts)    
 
         if unc is not None:
             unc = safenumpy(unc.view(env.config.num_arms, 2))
@@ -45,8 +44,8 @@ class TensorBoardVis:
 
     def collect_arm_distributions(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         means, variances = agent.compute_digit_distributions(env.digit_contexts)
-        means = safenumpy(means.view(env.config.num_arms, 2))
-        variances = safenumpy(variances.view(env.config.num_arms, 2))
+        means = safenumpy(torch.stack(means).view(env.config.num_arms, 2))
+        variances = safenumpy(torch.stack(variances).view(env.config.num_arms, 2))
 
         for i in range(env.config.num_arms):
             mu, sigma = means[i, 1], variances[i, 1]

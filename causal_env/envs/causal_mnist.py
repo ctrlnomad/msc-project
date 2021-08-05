@@ -10,6 +10,8 @@ import torch.distributions as distributions
 from typing import Any, List
 
 from causal_env.envs.timestep import Timestep
+
+
 import utils
 import utils.mnist as mnist
 
@@ -127,9 +129,10 @@ class CausalMnistBanditsEnv(gym.Env):
 
     def compute_regret(self, agent):
         best_action = agent.compute_best_action(self.digit_contexts)
+        best_action = utils.safenumpy(best_action)
 
-        arm = best_action - self.config.num_arms if best_action >= self.config.num_arms else best_action
-        treatment = arm > self.config.num_arms
+        arm = best_action[1]
+        treatment = best_action[0]
 
         regret = (self.ite.max() - self.ite[treatment, arm])
         return regret.item()

@@ -37,6 +37,9 @@ if __name__ == '__main__':
     parser = ArgumentParser(Options)
     config = parser.parse_args()
 
+    mytensor = torch.zeros(10000).cuda()
+    print(mytensor.shape)
+    
     config.Arch = arches.ConvNet
     config.Estimator = estimators.DropoutEstimator
 
