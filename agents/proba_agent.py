@@ -47,7 +47,7 @@ class VariationalAgent(BaseAgent):
     the other times we learn by choosing based on epsitemic uncertainty
     we evaluate by regret. 
     """
-    def __init__(self, config: VariationalAgentConfig):
+    def __init__(self, config: VariationalAgentConfig): # not quite variational agent config
         # learning is the ITE of causal arms
         self.memory = deque(maxlen=config.memsize)
 
@@ -75,8 +75,9 @@ class VariationalAgent(BaseAgent):
         
     def act(self, timestep: Timestep):
         uncertaitnties = self.compute_digit_uncertainties(timestep.context)
+        print(uncertaitnties)
         loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
-        intervention = loc[0] + len(timestep.context)* loc[1]
+        intervention = loc[1] + len(timestep.context)* loc[0]
         return intervention.item()
     
 
@@ -89,7 +90,6 @@ class VariationalAgent(BaseAgent):
 
     def compute_best_action(self, contexts: torch.Tensor):
         mu, _ = self.estimator(contexts)
-        mu = torch.stack(mu).squeeze()
+
         best_action = (mu.max() == mu).nonzero().squeeze()
-        print('wooo', best_action)
         return best_action

@@ -14,7 +14,6 @@ class TensorBoardVis:
     def __init__(self, config) -> None:
         self.config = config
         self.writer = SummaryWriter(log_dir=config.telemetry_dir)
-        print(config)
 
 
     def collect(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
@@ -44,8 +43,8 @@ class TensorBoardVis:
 
     def collect_arm_distributions(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         means, variances = agent.compute_digit_distributions(env.digit_contexts)
-        means = safenumpy(torch.stack(means).view(env.config.num_arms, 2))
-        variances = safenumpy(torch.stack(variances).view(env.config.num_arms, 2))
+        means = safenumpy(means.view(env.config.num_arms, 2))
+        variances = safenumpy(variances.view(env.config.num_arms, 2))
 
         for i in range(env.config.num_arms):
             mu, sigma = means[i, 1], variances[i, 1]

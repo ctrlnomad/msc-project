@@ -26,20 +26,22 @@ class Options(CausalMnistBanditsConfig, VariationalAgentConfig):
   debug: bool = False
 
   log_file: str = None
-  figure_dir: str = None
 
+  telemetry_dir: str = None
   telemetry_every: int = 1 
 
 
 import agents.uncertainty_estimators.estimators as estimators
 import agents.uncertainty_estimators.arches as arches
 
+
+
 if __name__ == '__main__':
     parser = ArgumentParser(Options)
     config = parser.parse_args()
 
     config.Arch = arches.ConvNet
-    config.Estimator = estimators.DropoutEstimator
+    config.Estimator = estimators.EnsembleEstimator
     config.num_arms = 9 # have not seen digit 9, unc should be high
 
 
@@ -69,17 +71,15 @@ if __name__ == '__main__':
         agent.observe(old_timestep)
         agent.train()
 
-    # print or record
-    context = mnist_env.digit_sampler.sample(9)
-    context = context[None]
-
+ 
+        # WOOOO print or record
+    context = mnist_env.digit_sampler.sample_array(10)
     if config.cuda:
         context = context.cuda()
 
     uncertainty = agent.estimator.compute_uncertainty(context)
-
-    vis.record_mnist_uncertainty() # TODO
-
+    print('WOOO UNCERTAINTY')
+    print(uncertainty)
     
 
 

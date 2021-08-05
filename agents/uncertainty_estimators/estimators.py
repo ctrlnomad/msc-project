@@ -38,7 +38,7 @@ class DropoutEstimator(BaseEstimator):
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
         # compute entropy with dropout
         bs = len(contexts)
-        result = torch.zeros((bs, 2, self.config.mc_samples))
+        result = torch.zeros((2, bs, self.config.mc_samples))
         if self.config.cuda:
             result = result.cuda()
             contexts = contexts.cuda()
@@ -50,10 +50,11 @@ class DropoutEstimator(BaseEstimator):
         return result.var(dim=-1) # Var[E[Y | X]]
 
     def train(self, loader):
-        return train_loop(self.net, loader, self.opt, self.config.cuda)
+        return train_loop(self.net, loader, self.opt, self.config)
 
     def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
-        return self.net(contexts)
+        mu, sigma = self.net(contexts)
+        return torch.stack(mu).squeeze(), torch.stack(sigma).squeeze()
 
 
 
@@ -74,20 +75,24 @@ class EnsembleEstimator(BaseEstimator):
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
         contexts = contexts.cuda() if self.config.cuda else contexts
         results = [torch.stack(net(contexts)[0]) for net in self.ensemble] 
-        results = torch.stack(results)
 
-        return results.var(dim=-1)
+        results = torch.stack(results).squeeze().var(dim=0)
+        return results
 
     def train(self, loader: DataLoader)  -> List[List[float]]: 
         losses = [[] for _ in range(self.config.ensemble_size)]
         
         for i in range(self.config.ensemble_size):
-            losses[i].append(train_loop(self.ensemble[i], loader, self.opts[i], self.config.cuda))
+            losses[i].append(train_loop(self.ensemble[i], loader, self.opts[i], self.config))
         
         return losses
 
     def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
-        results = [torch.stack(net(contexts)[0]) for net in self.ensemble] 
-        results = torch.stack(results)
+        outputs = [net(contexts) for net in self.ensemble]
 
-        return results.mean(dim=-1)
+        mu = [torch.stack(output[0]) for output in outputs]
+        mu = torch.stack(mu).squeeze().mean(dim=0)
+        
+        sigma = [torch.stack(output[1]) for output in outputs]
+        sigma = torch.stack(sigma).squeeze().mean(dim=0)
+        return mu, sigma

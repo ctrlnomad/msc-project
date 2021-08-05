@@ -66,7 +66,10 @@ class CausalMnistBanditsEnv(gym.Env):
 
     @property
     def digit_contexts(self):
-        return self.digit_sampler.sample_array(self.config.num_arms)
+        if self.config.cuda:
+            return self.digit_sampler.sample_array(self.config.num_arms).cuda()
+        else:
+            return self.digit_sampler.sample_array(self.config.num_arms)
 
 
     def reset(self) -> Any:
