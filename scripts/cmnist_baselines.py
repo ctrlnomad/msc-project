@@ -58,7 +58,7 @@ if __name__ == '__main__':
       old_timestep, timestep = mnist_env.step(op)
       agent.observe(old_timestep)
     
-    print('\n\n',mnist_env.ite, mnist_env.variance)
+    print('\n\n', mnist_env.ite, mnist_env.variance)
     #vis.record_distributions(mnist_env, 'Once/Environment', mnist_env.ite, mnist_env.variance)
     #vis.record_distributions(mnist_env, 'Once/Agent', *agent.compute_digit_distributions(mnist_env.digit_contexts))
 

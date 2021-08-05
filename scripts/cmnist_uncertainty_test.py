@@ -11,6 +11,7 @@ from agents import VariationalAgent, VariationalAgentConfig
 from argparse_dataclass import ArgumentParser
 
 from utils.tb_vis import TensorBoardVis
+
 import logging
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
                      datefmt='%m/%d %I:%M:%S %p',  
@@ -25,8 +26,8 @@ class Options(CausalMnistBanditsConfig, VariationalAgentConfig):
   debug: bool = False
 
   log_file: str = None
+  figure_dir: str = None
 
-  telemetry_dir: str = None
   telemetry_every: int = 1 
 
 
@@ -39,6 +40,8 @@ if __name__ == '__main__':
 
     config.Arch = arches.ConvNet
     config.Estimator = estimators.DropoutEstimator
+    config.num_arms = 9 # have not seen digit 9, unc should be high
+
 
     logger.warn(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
 
@@ -66,6 +69,16 @@ if __name__ == '__main__':
         agent.observe(old_timestep)
         agent.train()
 
+    # print or record
+    context = mnist_env.digit_sampler.sample(9)
+    context = context[None]
+
+    if config.cuda:
+        context = context.cuda()
+
+    uncertainty = agent.estimator.compute_uncertainty(context)
+
+    vis.record_mnist_uncertainty() # TODO
 
     
 
