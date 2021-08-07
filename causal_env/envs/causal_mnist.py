@@ -103,12 +103,13 @@ class CausalMnistBanditsEnv(gym.Env):
         
         current_ites = self.ite.index_select(1, self.current_timestep.info)
         current_variances = self.variance.index_select(1, self.current_timestep.info)
+
         reward_mean = current_ites.gather(0, self.current_timestep.treatments[None]).squeeze()
         reward_variances = current_variances.gather(0, self.current_timestep.treatments[None]).ravel()
 
         diag_vars = utils.to_diag_var(reward_variances)
 
-        reward = distributions.MultivariateNormal(reward_mean, diag_vars).sample().sum() # not the only way to generate reward
+        reward = distributions.MultivariateNormal(reward_mean, diag_vars).sample().sum()
 
         # generate new tiemstep
         old_timestep = self.current_timestep
