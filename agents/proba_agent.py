@@ -33,7 +33,7 @@ class VariationalAgentConfig:
     dim_in: Tuple[int] = (1, 28, 28)
     memsize: int = 100_000
     mc_samples: int = 100
-    ensemble_size: int = 100
+    ensemble_size: int = 10
     dropout_rate: float = 0.5
 
     do_nothing: float = 0.5 # do nothing for this proportion of steps

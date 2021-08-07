@@ -80,6 +80,7 @@ class CausalMnistBanditsEnv(gym.Env):
         ts = Timestep()
         ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
         ts.context = torch.stack([self.digit_sampler.sample(n) for n in ts.info])
+        ts.info = torch.LongTensor(ts.info)
         ts.treatments = self.default_dist.sample().long()
         ts.done = tsid >= self.config.num_ts
         ts.id = tsid
@@ -99,8 +100,11 @@ class CausalMnistBanditsEnv(gym.Env):
             intervention = arm_id > self.config.num_arms
             self.current_timestep.treatments[arm_id] = int(intervention)
 
-        reward_mean = self.ite.gather(0, self.current_timestep.treatments[None]).squeeze()
-        reward_variances = self.variance.gather(0, self.current_timestep.treatments[None]).ravel()
+        
+        current_ites = self.ite.index_select(1, self.current_timestep.info)
+        current_variances = self.variance.index_select(1, self.current_timestep.info)
+        reward_mean = current_ites.gather(0, self.current_timestep.treatments[None]).squeeze()
+        reward_variances = current_variances.gather(0, self.current_timestep.treatments[None]).ravel()
 
         diag_vars = utils.to_diag_var(reward_variances)
 

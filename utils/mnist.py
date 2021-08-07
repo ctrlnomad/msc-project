@@ -18,3 +18,7 @@ class MnistSampler:
 
     def sample_array(self, top):
         return torch.stack([self.sample(n) for n in range(top)])
+
+
+if __name__ == '__main__':
+    MnistSampler() # download the MNIST dataset
