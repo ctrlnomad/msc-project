@@ -2,10 +2,9 @@ import gym
 import gym.spaces as spaces
 import numpy as np
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import torch 
-import torchvision
 import torch.distributions as distributions
 from typing import Any, List
 
@@ -26,16 +25,6 @@ class CausalMnistBanditsConfig:
     num_ts: int = 100_000
 
 class CausalMnistBanditsEnv(gym.Env):
-    """
-    action space is multibinary. 
-    the observations that the agent recieves are MNIST digits of size (128, num_arms)
-    the environment samples these randomly at each time step and the agent's job is to find out the ITE (maybe extend to p(y | x, t, w))
-    the effect on the reward is associated with the digit, not the index of the arm 
-
-    The agent can intervene by selecting to pull an arm or choose to do nothing. 
-    The other arms are set to 0,1 depending on a biased coin flip. 
-    """
-
     def init(self, config: CausalMnistBanditsConfig) -> None:
         super().__init__()
 
@@ -58,7 +47,7 @@ class CausalMnistBanditsEnv(gym.Env):
         self.ite = torch.zeros((2, config.num_arms))
         self.ite[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
         self.variance = torch.rand((2, self.config.num_arms))*2
-
+        print(self.ite, self.causal_ids)
         self.digit_sampler = mnist.MnistSampler()
 
         logger.info('environment inited')

@@ -45,7 +45,7 @@ class DropoutEstimator(BaseEstimator):
 
         for i in range(self.config.mc_samples):
             effects = self.net(contexts)[0]
-            effects = torch.stack(effects).squeeze().T
+            effects = torch.stack(effects).squeeze()
             result[..., i] = effects
         return result.var(dim=-1) # Var[E[Y | X]]
 

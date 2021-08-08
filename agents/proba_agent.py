@@ -75,7 +75,6 @@ class VariationalAgent(BaseAgent):
         
     def act(self, timestep: Timestep):
         uncertaitnties = self.compute_digit_uncertainties(timestep.context)
-        print(uncertaitnties)
         loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
         intervention = loc[1] + len(timestep.context)* loc[0]
         return intervention.item()

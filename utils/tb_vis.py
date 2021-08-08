@@ -20,16 +20,27 @@ class TensorBoardVis:
         unc = agent.compute_digit_uncertainties(env.digit_contexts)    
 
         if unc is not None:
-            unc = safenumpy(unc.view(env.config.num_arms, 2))
+            unc = safenumpy(unc)
             # transforming tensor to dict
-            treat_unc = {f'arm #{i}': unc[i, 0] for i in range(env.config.num_arms)}
-            no_treat_unc = {f'arm #{i}': unc[i, 0] for i in range(env.config.num_arms)}
+            treat_unc = {f'causal arm #{i}' if i in env.causal_ids else 'arm #{i}' : unc[1, i] for i in range(env.config.num_arms)}
+            no_treat_unc = {f'causal arm #{i}' if i in env.causal_ids else 'arm #{i}' : unc[0, i] for i in range(env.config.num_arms)}
 
             self.writer.add_scalars('Treatment/uncertainty', tag_scalar_dict=treat_unc, global_step=timestep.id)
             self.writer.add_scalars('NoTreatment/uncertainty', tag_scalar_dict=no_treat_unc, global_step=timestep.id)
 
         regret = env.compute_regret(agent)
-        self.writer.add_scalar('General/Regret', regret , global_step=timestep.id)
+        self.writer.add_scalar('General/Regret', regret , global_step=timestep.id) # useless for now
+
+        # errors
+        ite_pred, _ = agent.estimator(env.digit_contexts)
+        errors = env.ite - ite_pred
+        
+        treat_err = {f'arm #{i}': errors[1, i] for i in range(env.config.num_arms)}
+        no_treat_err = {f'arm #{i}': errors[0, i] for i in range(env.config.num_arms)}
+
+        self.writer.add_scalars('Treatment/ITE Errors', tag_scalar_dict=treat_err, global_step=timestep.id)
+        self.writer.add_scalars('NoTreatment/ITE Errors', tag_scalar_dict=no_treat_err, global_step=timestep.id)
+
 
     def record_normal(self, tag, mean, variance, t):
         self.writer.add_histogram(tag, self.unroll_norm(mean, variance), global_step=t)
@@ -43,14 +54,14 @@ class TensorBoardVis:
 
     def collect_arm_distributions(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         means, variances = agent.compute_digit_distributions(env.digit_contexts)
-        means = safenumpy(means.view(env.config.num_arms, 2))
-        variances = safenumpy(variances.view(env.config.num_arms, 2))
+        means = safenumpy(means)
+        variances = safenumpy(variances)
 
         for i in range(env.config.num_arms):
-            mu, sigma = means[i, 1], variances[i, 1]
+            mu, sigma = means[1, i], variances[1, i]
             self.record_normal(f'Treatment Agent Distributions/arm #{i}', mu, sigma, timestep.id)
 
-            mu, sigma = means[i, 0], variances[i, 0]
+            mu, sigma = means[0, i], variances[0, i ]
             self.record_normal(f'No Treatment Agent Distributions/arm #{i}', mu, sigma, timestep.id)
 
     def record_distributions(self,env, parent_tag, means, variances):

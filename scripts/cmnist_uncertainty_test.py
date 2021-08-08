@@ -49,7 +49,6 @@ if __name__ == '__main__':
 
     mnist_env = gym.make('CausalMnistBanditsEnv-v0')
     mnist_env.init(config)
-
     logger.info(config)
 
     agent = VariationalAgent(config)
