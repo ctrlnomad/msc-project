@@ -1,6 +1,8 @@
 import torch
 torch.autograd.set_detect_anomaly(True)
 
+import warnings
+warnings.filterwarnings("ignore", message=r"Passing", category=FutureWarning)
 
 import gym
 import numpy as np
@@ -12,7 +14,7 @@ from argparse_dataclass import ArgumentParser
 
 from utils.tb_vis import TensorBoardVis
 
-import tqdm
+from tqdm import tqdm
 import logging
 
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
@@ -55,11 +57,11 @@ if __name__ == '__main__':
 
     agent = VariationalAgent(config)
     vis = TensorBoardVis(config)
-    vis.record_env(mnist_env)
+    vis.record_experiment(mnist_env, agent, config)
     timestep = mnist_env.reset()
 
     with tqdm(total=config.num_ts) as pbar:
-        for timestep in mnist_env:
+        while not timestep.done:
 
             if timestep.id % config.telemetry_every == 0:
                 vis.collect(agent, mnist_env, timestep)
