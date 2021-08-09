@@ -147,4 +147,3 @@ class CausalMnistBanditsEnv(gym.Env):
 
         regret = (self.ite.max() - self.ite[treatment, arm])
         return regret.item()
-
