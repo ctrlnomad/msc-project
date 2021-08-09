@@ -46,6 +46,8 @@ class DropoutEstimator(BaseEstimator):
         for i in range(self.config.mc_samples):
             effects = self.net(contexts)[0]
             effects = torch.stack(effects).squeeze()
+            if bs ==1: # hack
+                effects = effects[None].T
             result[..., i] = effects
         return result.var(dim=-1) # Var[E[Y | X]]
 
@@ -53,7 +55,9 @@ class DropoutEstimator(BaseEstimator):
         return train_loop(self.net, loader, self.opt, self.config)
 
     def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
+        self.net.eval()
         mu, sigma = self.net(contexts)
+        self.net.train()
         return torch.stack(mu).squeeze(), torch.stack(sigma).squeeze()
 
 
@@ -62,7 +66,6 @@ class DropoutEstimator(BaseEstimator):
 class EnsembleEstimator(BaseEstimator):
     def __init__(self, make: Callable, config ) -> None: 
         super().__init__(make, config)
-        config.dropout_rate = 0 # TODO maybe set dropout to 0; check docs
         self.ensemble = [make(config) for _ in range(self.config.ensemble_size)]
 
         if self.config.cuda:
@@ -88,11 +91,15 @@ class EnsembleEstimator(BaseEstimator):
         return losses
 
     def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
+        for m in self.ensemble: m.eval()
         outputs = [net(contexts) for net in self.ensemble]
 
-        mu = [torch.stack(output[0]) for output in outputs]
-        mu = torch.stack(mu).squeeze().mean(dim=0)
+        mus = [torch.stack(output[0]) for output in outputs]
+        mus = torch.stack(mus).squeeze()
+        mu = mus.mean(dim=0)
         
-        sigma = [torch.stack(output[1]) for output in outputs]
-        sigma = torch.stack(sigma).squeeze().mean(dim=0)
+        sigmas = [torch.stack(output[1]) for output in outputs]
+        sigmas = torch.stack(sigmas).squeeze()
+        sigma =  sigmas.mean(dim=0) + mu.var(dim=0) # total variance
+        for m in self.ensemble: m.train()
         return mu, sigma

@@ -25,7 +25,7 @@ class EffectNet(nn.Module):
 
     def forward(self, x):
         emb = self.emb(x)
-        sigma = torch.log(1+torch.exp(self.sigma(emb)))
+        sigma = torch.log(1+torch.exp(self.sigma(emb))) # softplus
         return self.mu(emb),  sigma
 
 class ConvNet(nn.Module):
@@ -113,8 +113,8 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         mu_pred = torch.stack(mu_pred).squeeze()
         sigma_pred = torch.stack(sigma_pred).squeeze()
 
-        mu_pred = mu_pred.gather(-1, treatments[None])
-        sigma_pred = sigma_pred.gather(-1, treatments[None])
+        mu_pred = mu_pred.gather(0, treatments[None])
+        sigma_pred = sigma_pred.gather(0, treatments[None])
 
         sigma_mat_pred = utils.to_diag_var(sigma_pred, cuda=config.cuda)
         loss = -distributions.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()

@@ -15,6 +15,9 @@ class TensorBoardVis:
         self.config = config
         self.writer = SummaryWriter(log_dir=config.telemetry_dir)
 
+    def record_env(self,  env: CausalMnistBanditsEnv):
+        # self.writer.add_text()
+        pass
 
     def collect(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         unc = agent.compute_digit_uncertainties(env.digit_contexts)    
@@ -33,7 +36,8 @@ class TensorBoardVis:
 
         # errors
         ite_pred, _ = agent.estimator(env.digit_contexts)
-        errors = env.ite - ite_pred
+        env_ite = env.ite.cuda() if self.config.cuda else env.ite 
+        errors = env_ite  - ite_pred
         
         treat_err = {f'arm #{i}': errors[1, i] for i in range(env.config.num_arms)}
         no_treat_err = {f'arm #{i}': errors[0, i] for i in range(env.config.num_arms)}
