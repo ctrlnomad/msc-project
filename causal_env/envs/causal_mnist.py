@@ -47,11 +47,25 @@ class CausalMnistBanditsEnv(gym.Env):
         self.ite = torch.zeros((2, config.num_arms))
         self.ite[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
         self.variance = torch.rand((2, self.config.num_arms))*2
-        print(self.ite, self.causal_ids)
+
         self.digit_sampler = mnist.MnistSampler()
 
         logger.info('environment inited')
         self._inited = True
+
+
+    def __repr__(self) -> str:
+        s = f"""CausalMnistBanditsEnv
+            Causal IDs: {self.causal_ids}
+
+            Default Probs: {self.default_probs}
+
+            Treatment ITE: {self.ite[:, 1]}
+            No Treatment ITE: {self.ite[:, 1]}
+
+            Variances: {self.variance}
+            """
+        return s
 
     @property
     def digit_contexts(self):

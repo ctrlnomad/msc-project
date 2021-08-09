@@ -15,9 +15,11 @@ class TensorBoardVis:
         self.config = config
         self.writer = SummaryWriter(log_dir=config.telemetry_dir)
 
-    def record_env(self,  env: CausalMnistBanditsEnv):
-        # self.writer.add_text()
-        pass
+    def record_experiment(self,  env: CausalMnistBanditsEnv, agent: BaseAgent, config):
+
+        self.writer.add_text('Env Description', str(env), global_step=0)
+        self.writer.add_text('Config', str(config) , global_step=0)
+
 
     def collect(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         unc = agent.compute_digit_uncertainties(env.digit_contexts)    
@@ -25,8 +27,8 @@ class TensorBoardVis:
         if unc is not None:
             unc = safenumpy(unc)
             # transforming tensor to dict
-            treat_unc = {f'causal arm #{i}' if i in env.causal_ids else 'arm #{i}' : unc[1, i] for i in range(env.config.num_arms)}
-            no_treat_unc = {f'causal arm #{i}' if i in env.causal_ids else 'arm #{i}' : unc[0, i] for i in range(env.config.num_arms)}
+            treat_unc = {f'causal arm #{i}' if i in env.causal_ids else f'arm #{i}' : unc[1, i] for i in range(env.config.num_arms)}
+            no_treat_unc = {f'causal arm #{i}' if i in env.causal_ids else f'arm #{i}' : unc[0, i] for i in range(env.config.num_arms)}
 
             self.writer.add_scalars('Treatment/uncertainty', tag_scalar_dict=treat_unc, global_step=timestep.id)
             self.writer.add_scalars('NoTreatment/uncertainty', tag_scalar_dict=no_treat_unc, global_step=timestep.id)

@@ -15,7 +15,7 @@ from utils.tb_vis import TensorBoardVis
 import logging
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
                      datefmt='%m/%d %I:%M:%S %p',  
-                     level=logging.DEBUG)
+                     level=logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +49,13 @@ if __name__ == '__main__':
 
     mnist_env = gym.make('CausalMnistBanditsEnv-v0')
     mnist_env.init(config)
-    print(mnist_env.ite)
-    logger.info(config)
+
+    logger.warning(config)
+    logger.warning(mnist_env)
 
     agent = VariationalAgent(config)
     vis = TensorBoardVis(config)
-
+    vis.record_env(mnist_env)
     timestep = mnist_env.reset()
 
     while not timestep.done:
