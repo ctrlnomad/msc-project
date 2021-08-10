@@ -9,7 +9,7 @@ import gym
 import numpy as np
 from dataclasses import dataclass
 
-from causal_env.envs import CausalMnistBanditsConfig
+from causal_env.envs import CausalMnistBanditsConfig, CausalMnistBanditsEnvs
 from agents import VariationalAgent, VariationalAgentConfig
 from argparse_dataclass import ArgumentParser
 
@@ -33,13 +33,17 @@ class Options(CausalMnistBanditsConfig, VariationalAgentConfig):
   log_file: str = None
 
   telemetry_dir: str = None
-  telemetry_every: int = 1 
+  telemetry_every: int = 5
 
 
 import agents.uncertainty_estimators.estimators as estimators
 import agents.uncertainty_estimators.arches as arches
 
-
+def collect_digit_unc(vis: TensorBoardVis,agent: VariationalAgent,env: CausalMnistBanditsEnv,t):
+    digit = env.digit_sampler.sample(9)
+    treat, no_treat = agent.estimator.compute_digit_uncertainty(digit[None])
+    vis.writer.add_scalar('General/Unknown Digit Treatment Unc. ', treat, t.id)
+    vis.writer.add_scalar('General/Unknown Digit Treatment Unc. ', no_treat, t.id)
 
 if __name__ == '__main__':
     parser = ArgumentParser(Options)
@@ -50,7 +54,7 @@ if __name__ == '__main__':
     config.num_arms = 9 # have not seen digit 9, unc should be high
 
 
-    logger.warn(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
+    logger.warning(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
 
     mnist_env = gym.make('CausalMnistBanditsEnv-v0')
     mnist_env.init(config)

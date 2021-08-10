@@ -107,7 +107,7 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         
         contexts = contexts.view(-1, *config.dim_in)
         treatments = treatments.flatten()
-        effects = effects.repeat(config.num_arms)
+        effects = torch.repeat_interleave(effects, config.num_arms)
         mu_pred, sigma_pred = model(contexts, add_delta=True)
 
         mu_pred = torch.stack(mu_pred).squeeze()

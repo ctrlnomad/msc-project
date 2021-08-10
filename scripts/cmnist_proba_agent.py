@@ -47,7 +47,7 @@ if __name__ == '__main__':
     config.Arch = arches.ConvNet
     config.Estimator = estimators.EnsembleEstimator
 
-    logger.warn(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
+    logger.warning(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
 
     mnist_env = gym.make('CausalMnistBanditsEnv-v0')
     mnist_env.init(config)
