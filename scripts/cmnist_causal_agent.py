@@ -1,17 +1,25 @@
+import torch
+torch.autograd.set_detect_anomaly(True)
+
+import warnings
+warnings.filterwarnings("ignore", message=r"Passing", category=FutureWarning)
+
 import gym
 import numpy as np
 from dataclasses import dataclass
 
-from causal_env.envs import CausalMnistBanditsConfig
+from causal_env.envs import CausalMnistBanditsConfig, CausalMnistBanditsEnv
 from agents import CausalAgent, CausalAgentConfig
 from argparse_dataclass import ArgumentParser
 
-import matplotlib.pyplot as plt
-from utils.vis import Vis
+from utils.tb_vis import TensorBoardVis
+
+from tqdm import tqdm
 import logging
+
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
                      datefmt='%m/%d %I:%M:%S %p',  
-                     level=logging.DEBUG)
+                     level=logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -22,46 +30,56 @@ class Options(CausalMnistBanditsConfig, CausalAgentConfig):
   debug: bool = False
 
   log_file: str = None
-  figure_dir: str = None
 
+  telemetry_dir: str = None
   telemetry_every: int = 1 
+
+
+import agents.uncertainty_estimators.estimators as estimators
+import agents.uncertainty_estimators.arches as arches
 
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(Options)
     config = parser.parse_args()
-    
-    mnist_env = gym.make('CausalMnistBanditsEnv-v0')
+
+    config.Arch = arches.ConvNet
+    config.Estimator = estimators.EnsembleEstimator
+
+    logger.warning(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
+
+    mnist_env = CausalMnistBanditsEnv()
     mnist_env.init(config)
 
-    logger.info(config)
+    logger.warning(config)
+    logger.warning(mnist_env)
 
-    agent = CausalAgent(config, mnist_env.causal_model)
-    vis = Vis(config.figure_dir, mnist_env.causal_ids) # should support None path??? or nah
-
+    config.causal_ids = mnist_env.causal_ids
+    agent = CausalAgent(config)
+    
+    vis = TensorBoardVis(config)
+    vis.record_experiment(mnist_env, agent, config)
     timestep = mnist_env.reset()
 
-    while not timestep.done:
+    with tqdm(total=config.num_ts) as pbar:
+        while not timestep.done:
 
-        # collect telemetry
-        if timestep.id % config.telemetry_every == 0:
-            vis.collect(agent, mnist_env, timestep)
+            if timestep.id % config.telemetry_every == 0:
+                vis.collect(agent, mnist_env, timestep)
+                vis.collect_arm_distributions(agent, mnist_env, timestep)
 
-        # mnist_env.compute_kl(agent)
-        if config.num_ts * config.do_nothing < timestep.id:
-            op = agent.act(timestep)
-        else:
-            op = mnist_env.noop
+            if config.num_ts * config.do_nothing < timestep.id:
+                op = agent.act(timestep)
+            else:
+                op = mnist_env.noop
 
-        old_timestep, timestep = mnist_env.step(op)
-        agent.observe(old_timestep)
-        agent.train()
+            old_timestep, timestep = mnist_env.step(op)
 
-        
-    if config.figure_dir:
-        vis.save_plots()
+            agent.observe(old_timestep)
+            agent.train()
 
+            pbar.update(1)
 
     
 

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torchvision.models as models
 import utils
 
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -25,8 +25,7 @@ class EffectNet(nn.Module):
 
     def forward(self, x):
         emb = self.emb(x)
-        sigma = torch.log(1+torch.exp(self.sigma(emb))) # softplus
-        return self.mu(emb),  sigma
+        return self.mu(emb),  F.relu(self.sigma(emb))
 
 class ConvNet(nn.Module):
 
@@ -94,7 +93,7 @@ class ResNet(nn.Module):
 
 
 def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
-            config) -> List[float]: 
+            config, deconfound: Callable = None) -> List[float]: 
 
     losses = []
 
@@ -104,10 +103,14 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         contexts = contexts.cuda() if config.cuda else contexts
         effects = effects.cuda() if config.cuda else effects
         treatments = treatments.cuda() if config.cuda else treatments
-        
-        contexts = contexts.view(-1, *config.dim_in)
-        treatments = treatments.flatten()
-        effects = torch.repeat_interleave(effects, config.num_arms)
+
+        if deconfound:
+            contexts, treatments, effects = deconfound(model, contexts, treatments, effects)
+        else:
+            contexts = contexts.view(-1, *config.dim_in)
+            treatments = treatments.flatten()
+            effects = torch.repeat_interleave(effects, config.num_arms)
+            
         mu_pred, sigma_pred = model(contexts, add_delta=True)
 
         mu_pred = torch.stack(mu_pred).squeeze()
@@ -124,3 +127,27 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         losses.append(loss.item()) # better way of doing this tho
     
     return losses
+
+
+
+def decounfound(self, contexts, treatments,  effects):
+    with torch.no_grad():
+        causal_treatments = treatments.index_select(dim=1, index=self.causal_ids)
+        bs = len(contexts)
+
+        confounding_contexts = contexts.index_select(dim=1, index=self.causal_ids).view(-1, *self.config.dim_in)
+        mu_pred, _ = self.estimator(confounding_contexts)
+        mu_pred = mu_pred.view(bs, -1, 2)
+        # we know how many causal effects there are 4 in this case
+        num_causal_arms = len(self.causal_ids)
+        deconfounded_effects  = torch.zeros(bs, num_causal_arms)
+
+        mu_pred = mu_pred.gather(-1, causal_treatments[...,None]).squeeze()
+        for i in range(bs):
+            deconfounded_effects[i] = effects[i] - (mu_pred[i].sum() - mu_pred[i])
+
+        deconfounded_effects = deconfounded_effects.flatten()
+        causal_treatments = causal_treatments.flatten()
+
+        return confounding_contexts,causal_treatments, deconfounded_effects
+

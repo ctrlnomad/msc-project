@@ -46,8 +46,11 @@ class CausalMnistBanditsEnv(gym.Env):
 
         self.ite = torch.zeros((2, config.num_arms))
         self.ite[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
-        self.variance = torch.rand((2, self.config.num_arms))*2
+        
+        self.variance = torch.rand((2, self.config.num_arms))/10 # small interference
+        self.variance[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))
 
+        self.causal_ids = torch.LongTensor(self.causal_ids)
         self.digit_sampler = mnist.MnistSampler()
 
         logger.info('environment inited')
