@@ -100,11 +100,14 @@ class CausalAgent(BaseAgent):
                 bs = len(contexts)
 
                 confounding_contexts = contexts.index_select(dim=1, index=self.config.causal_ids).view(-1, *self.config.dim_in)
-                mu_pred, _ = model(confounding_contexts)
-                mu_pred = torch.stack(mu_pred).view(bs, -1, 2) # what
-                # we know how many causal effects there are 4 in this case
+                mu_pred, _ = self.estimator(confounding_contexts)
+                mu_pred = mu_pred.view(bs, -1, 2)
+
                 num_causal_arms = len(self.config.causal_ids)
                 deconfounded_effects  = torch.zeros(bs, num_causal_arms)
+
+                if self.config.cuda:
+                    deconfounded_effects = deconfounded_effects.cuda()
 
                 mu_pred = mu_pred.gather(-1, causal_treatments[..., None]).squeeze()
                 for i in range(bs):
