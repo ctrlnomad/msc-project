@@ -10,6 +10,7 @@ class Timestep:
     info: Any = None
     context: torch.Tensor = field(repr=False, default=None)
     treatments: torch.Tensor = None
+    causal_ids: torch.LongTensor = None
     reward: float = None
     done: bool = False
     id: int = None
@@ -24,6 +25,7 @@ class TimestepDataset(trchdata.Dataset):
         ts = self.dataset[i]
         return ts.context, \
                 ts.treatments, \
+                ts.causal_ids, \
                 ts.reward
 
     def __len__(self):

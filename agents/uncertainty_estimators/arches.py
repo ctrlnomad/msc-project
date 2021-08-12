@@ -97,20 +97,23 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
 
     losses = []
 
-    for contexts, treatments, effects in loader:
+    for contexts, treatments, causal_ids, effects in loader:
         opt.zero_grad()
         
         contexts = contexts.cuda() if config.cuda else contexts
         effects = effects.cuda() if config.cuda else effects
         treatments = treatments.cuda() if config.cuda else treatments
 
+
         if deconfound:
-            contexts, treatments, effects = deconfound(model, contexts, treatments, effects)
+            effects = deconfound(contexts, treatments, causal_ids, effects)
+            effects = effects.flatten()
         else:
-            contexts = contexts.view(-1, *config.dim_in)
-            treatments = treatments.flatten()
             effects = torch.repeat_interleave(effects, config.num_arms)
-            
+
+        contexts = contexts.view(-1, *config.dim_in)
+        treatments = treatments.flatten()
+
         mu_pred, sigma_pred = model(contexts, add_delta=True)
 
         mu_pred = torch.stack(mu_pred).squeeze()
@@ -127,27 +130,4 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         losses.append(loss.item()) # better way of doing this tho
     
     return losses
-
-
-
-def decounfound(self, contexts, treatments,  effects):
-    with torch.no_grad():
-        causal_treatments = treatments.index_select(dim=1, index=self.causal_ids)
-        bs = len(contexts)
-
-        confounding_contexts = contexts.index_select(dim=1, index=self.causal_ids).view(-1, *self.config.dim_in)
-        mu_pred, _ = self.estimator(confounding_contexts)
-        mu_pred = mu_pred.view(bs, -1, 2)
-        # we know how many causal effects there are 4 in this case
-        num_causal_arms = len(self.causal_ids)
-        deconfounded_effects  = torch.zeros(bs, num_causal_arms)
-
-        mu_pred = mu_pred.gather(-1, causal_treatments[...,None]).squeeze()
-        for i in range(bs):
-            deconfounded_effects[i] = effects[i] - (mu_pred[i].sum() - mu_pred[i])
-
-        deconfounded_effects = deconfounded_effects.flatten()
-        causal_treatments = causal_treatments.flatten()
-
-        return confounding_contexts,causal_treatments, deconfounded_effects
 

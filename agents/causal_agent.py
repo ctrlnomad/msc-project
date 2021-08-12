@@ -93,28 +93,28 @@ class CausalAgent(BaseAgent):
     
     def make_decounfound(self):
 
-        def deconfound(model, contexts, treatments,  effects):
+        def deconfound(contexts, treatments,  ts_causal_ids, effects):
             with torch.no_grad():
-                print('deconfounding')
-                causal_treatments = treatments.index_select(dim=1, index=self.config.causal_ids)
+
+                causal_idxs = torch.nonzero(ts_causal_ids, as_tuple=False)
+                causal_treatments = torch.masked_select(treatments, ts_causal_ids.bool())
+
+                confounding_contexts = torch.stack([contexts[bidx, sidx] for bidx, sidx in causal_idxs])
+
                 bs = len(contexts)
-
-                confounding_contexts = contexts.index_select(dim=1, index=self.config.causal_ids).view(-1, *self.config.dim_in)
                 mu_pred, _ = self.estimator(confounding_contexts)
-                mu_pred = mu_pred.view(bs, -1, 2)
 
-                num_causal_arms = len(self.config.causal_ids)
-                deconfounded_effects  = torch.zeros(bs, num_causal_arms)
+                deconfounded_effects  = torch.zeros(bs, self.config.num_arms)
 
                 if self.config.cuda:
                     deconfounded_effects = deconfounded_effects.cuda()
 
-                mu_pred = mu_pred.gather(-1, causal_treatments[..., None]).squeeze()
+                mu_pred = mu_pred.gather(0, causal_treatments[None]).squeeze()
+  
                 for i in range(bs):
-                    deconfounded_effects[i] = effects[i] - (mu_pred[i].sum() - mu_pred[i])
+                    total_batch_effect = torch.masked_select(mu_pred ,causal_idxs[:, 0] == i)
+                    deconfounded_effects[i, ts_causal_ids[i]] = effects[i] - (total_batch_effect.sum() - total_batch_effect)
 
-                deconfounded_effects = deconfounded_effects.flatten()
-                causal_treatments = causal_treatments.flatten()
-                return confounding_contexts, causal_treatments, deconfounded_effects
+                return deconfounded_effects
 
         return deconfound

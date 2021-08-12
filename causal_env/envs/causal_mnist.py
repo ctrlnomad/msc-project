@@ -51,6 +51,8 @@ class CausalMnistBanditsEnv(gym.Env):
         self.variance[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))
 
         self.causal_ids = torch.LongTensor(self.causal_ids)
+        if self.config.cuda:
+            self.causal_ids = self.causal_ids.cuda()
         self.digit_sampler = mnist.MnistSampler()
 
         logger.info('environment inited')
@@ -85,6 +87,10 @@ class CausalMnistBanditsEnv(gym.Env):
     def _make_timestep(self, tsid) -> Any:
         ts = Timestep()
         ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
+
+        ts.causal_ids = np.in1d(ts.info, self.causal_ids.cpu().numpy())
+        #ts.causal_ids = torch.LongTensor(np.where(ts_causal_ids)[0])
+
         ts.context = torch.stack([self.digit_sampler.sample(n) for n in ts.info])
         ts.info = torch.LongTensor(ts.info)
         ts.treatments = self.default_dist.sample().long()
