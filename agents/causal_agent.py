@@ -109,6 +109,9 @@ class CausalAgent(BaseAgent):
                 if self.config.cuda:
                     deconfounded_effects = deconfounded_effects.cuda()
 
+                if len(mu_pred.shape) != len(causal_treatments[None].shape):
+                    mu_pred = mu_pred[None]
+                    
                 mu_pred = mu_pred.gather(0, causal_treatments[None]).squeeze()
   
                 for i in range(bs):
