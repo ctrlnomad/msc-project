@@ -1,6 +1,5 @@
 from datetime import time
 import torch
-from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
 from scipy.stats import norm
@@ -9,22 +8,28 @@ from causal_env.envs import CausalMnistBanditsEnv
 from causal_env.envs import Timestep
 from agents.base_agent import BaseAgent
 
+import wandb
+
 from utils.misc import safenumpy
 
 class TensorBoardVis:
     def __init__(self, config) -> None:
         self.config = config
-        self.writer = SummaryWriter(log_dir=config.telemetry_dir)
+        wandb.config = config
+
+        wandb.init(project='causal-bandits', entity='ctrlnomad')
+
 
     def record_experiment(self,  env: CausalMnistBanditsEnv, agent: BaseAgent, config):
 
-        self.writer.add_text('Env Description', str(env), global_step=0)
-        self.writer.add_text('Config', str(config) , global_step=0)
+        wandb.log({'Env Description': str(env)})
+        wandb.log({'Config': str(config) })
+
 
     def make_scalar_dict(self, tensor, causal_ids, num_arms):
         return {f'causal arm #{i}' if i in causal_ids else f'arm #{i}' : tensor[i] for i in range(num_arms)}
 
-
+    
     def collect(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         unc = agent.compute_digit_uncertainties(env.digit_contexts)    
 
@@ -34,8 +39,8 @@ class TensorBoardVis:
             treat_unc = self.make_scalar_dict(unc[1, :], env.causal_ids, env.config.num_arms)
             no_treat_unc = self.make_scalar_dict(unc[0, :], env.causal_ids, env.config.num_arms)
 
-            self.writer.add_scalars('Treatment/uncertainty', tag_scalar_dict=treat_unc, global_step=timestep.id)
-            self.writer.add_scalars('NoTreatment/uncertainty', tag_scalar_dict=no_treat_unc, global_step=timestep.id)
+            wandb.log('Treatment/uncertainty', tag_scalar_dict=treat_unc, global_step=timestep.id)
+            wandb.log('NoTreatment/uncertainty', tag_scalar_dict=no_treat_unc, global_step=timestep.id)
 
         regret = env.compute_regret(agent)
         self.writer.add_scalar('General/Regret', regret , global_step=timestep.id) # useless for now

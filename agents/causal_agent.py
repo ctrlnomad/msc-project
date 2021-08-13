@@ -36,6 +36,7 @@ class CausalAgentConfig:
     cuda: bool = False
     batch_size:int = 32
 
+    fixed_sigma: bool = False
     causal_ids: List[int] = None
     
 class CausalAgent(BaseAgent):
@@ -95,13 +96,15 @@ class CausalAgent(BaseAgent):
 
         def deconfound(contexts, treatments,  ts_causal_ids, effects):
             with torch.no_grad():
+                bs = len(contexts)
 
                 causal_idxs = torch.nonzero(ts_causal_ids, as_tuple=False)
                 causal_treatments = torch.masked_select(treatments, ts_causal_ids.bool())
 
-                confounding_contexts = torch.stack([contexts[bidx, sidx] for bidx, sidx in causal_idxs])
+                if causal_idxs.nelement() == 0:
+                    return  torch.zeros(bs, self.config.num_arms)
 
-                bs = len(contexts)
+                confounding_contexts = torch.stack([contexts[bidx, sidx] for bidx, sidx in causal_idxs])
                 mu_pred, _ = self.estimator(confounding_contexts)
 
                 deconfounded_effects  = torch.zeros(bs, self.config.num_arms)
@@ -110,8 +113,8 @@ class CausalAgent(BaseAgent):
                     deconfounded_effects = deconfounded_effects.cuda()
 
                 if len(mu_pred.shape) != len(causal_treatments[None].shape):
-                    mu_pred = mu_pred[None]
-                    
+                    mu_pred = mu_pred.unsqueeze(1)
+
                 mu_pred = mu_pred.gather(0, causal_treatments[None]).squeeze()
   
                 for i in range(bs):

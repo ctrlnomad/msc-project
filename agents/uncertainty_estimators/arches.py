@@ -112,7 +112,6 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
             effects = effects.flatten()
         else:
             effects = torch.repeat_interleave(effects, config.num_arms)
-            # 4,5,6 -> [-1, -1, -1]
 
         contexts = contexts.view(-1, *config.dim_in)
         treatments = treatments.flatten()
@@ -125,20 +124,15 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         mu_pred = mu_pred.gather(0, treatments[None]) # 2, num_arms
         sigma_pred = sigma_pred.gather(0, treatments[None])
 
-        sigma_mat_pred = utils.to_diag_var(sigma_pred, cuda=config.cuda)
-        
-        # TODO: Mixture
-        # distributions.Categorical(torch.)
-        # loss = -D.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
-        mix =  D.Categorical(torch.ones(len(effects)) / len(effects))
-        comp = D.Normal(mu_pred, sigma_pred)
+        if config.fixed_sigma:
+            sigma_pred = torch.ones_like(sigma_pred) * 0.1
 
-        gmm = MixtureSameFamily(mix, comp)
-        loss = -gmm.log_prob(effects).mean()
+        sigma_mat_pred = utils.to_diag_var(sigma_pred, cuda=config.cuda)
+
+        loss = -D.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
 
         loss.backward()
         opt.step()
-        # TODO: thought experiment
 
         losses.append(loss.item()) # better way of doing this tho
     

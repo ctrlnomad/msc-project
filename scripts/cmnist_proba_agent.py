@@ -45,7 +45,7 @@ if __name__ == '__main__':
     config = parser.parse_args()
 
     config.Arch = arches.ConvNet
-    config.Estimator = estimators.EnsembleEstimator
+    config.Estimator = estimators.DropoutEstimator
 
     logger.warning(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
 
@@ -58,6 +58,7 @@ if __name__ == '__main__':
     agent = VariationalAgent(config)
     vis = TensorBoardVis(config)
     vis.record_experiment(mnist_env, agent, config)
+
     timestep = mnist_env.reset()
 
     with tqdm(total=config.num_ts) as pbar:

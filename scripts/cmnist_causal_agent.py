@@ -45,7 +45,7 @@ if __name__ == '__main__':
     config = parser.parse_args()
 
     config.Arch = arches.ConvNet
-    config.Estimator = estimators.EnsembleEstimator
+    config.Estimator = estimators.DropoutEstimator
 
     logger.warning(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
 

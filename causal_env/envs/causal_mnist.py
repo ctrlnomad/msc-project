@@ -24,6 +24,9 @@ class CausalMnistBanditsConfig:
 
     num_ts: int = 100_000
 
+    scale_divider: int = 1
+    loc_multiplier: int = 1
+
 class CausalMnistBanditsEnv(gym.Env):
     def init(self, config: CausalMnistBanditsConfig) -> None:
         super().__init__()
@@ -45,28 +48,28 @@ class CausalMnistBanditsEnv(gym.Env):
         self.causal_model[self.causal_ids] = 1
 
         self.ite = torch.zeros((2, config.num_arms))
-        self.ite[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))*2-1
+        self.ite[:, self.causal_ids] = (torch.rand((2, self.config.causal_arms))*2-1) * self.config.loc_multiplier
         
-        self.variance = torch.rand((2, self.config.num_arms))/10
-        self.variance[:, self.causal_ids] = torch.rand((2, self.config.causal_arms))
-
+        self.variance = torch.rand((2, self.config.num_arms)) / self.config.scale_divider
         self.causal_ids = torch.LongTensor(self.causal_ids)
+
         if self.config.cuda:
             self.causal_ids = self.causal_ids.cuda()
+
         self.digit_sampler = mnist.MnistSampler()
 
         logger.info('environment inited')
         self._inited = True
 
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         s = f"""CausalMnistBanditsEnv
             Causal IDs: {self.causal_ids}
 
             Default Probs: {self.default_probs}
 
-            Treatment ITE: {self.ite[:, 1]}
-            No Treatment ITE: {self.ite[:, 1]}
+            Treatment ITE: {self.ite[1, :]}
+            No Treatment ITE: {self.ite[0, :]}
 
             Variances: {self.variance}
             """
