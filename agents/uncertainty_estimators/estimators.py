@@ -14,7 +14,7 @@ class BaseEstimator:
         self.config = config
         self.deconfound_fn = deconfound_fn
 
-    def compute_uncertainty(self, contexts: torch.Tensor):
+    def compute_uncertainty(self, contexts: torch.Tensor): # -> compute ite-uncertainty
         raise NotImplementedError()
 
     def train(self, loader: DataLoader) -> List[float]: 
@@ -23,6 +23,8 @@ class BaseEstimator:
     def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError()
 
+    def compute_cate_uncertainty(self, contexts: torch.Tensor): # -> compute ite-uncertainty
+        raise NotImplementedError()
 
 
 
@@ -52,6 +54,22 @@ class DropoutEstimator(BaseEstimator):
             result[..., i] = effects
         return result.var(dim=-1) # Var[E[Y | X]]
 
+    def compute_cate_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
+        # compute entropy with dropout
+        bs = len(contexts)
+        result = torch.zeros((bs, self.config.mc_samples))
+        if self.config.cuda:
+            result = result.cuda()
+            contexts = contexts.cuda()
+
+        for i in range(self.config.mc_samples):
+            effects = self.net(contexts)[0]
+            effects = torch.stack(effects).squeeze()
+            if bs ==1: 
+                effects = effects[None].T
+            result[..., i] = effects[1, :] - effects[0, :] 
+        return result.var(dim=-1)
+
     def train(self, loader):
         return train_loop(self.net, loader, self.opt, self.config, deconfound=self.deconfound_fn)
 
@@ -79,6 +97,17 @@ class EnsembleEstimator(BaseEstimator):
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
         contexts = contexts.cuda() if self.config.cuda else contexts
         results = [torch.stack(net(contexts)[0]) for net in self.ensemble] 
+
+        results = torch.stack(results).squeeze().var(dim=0)
+        return results
+
+
+    def compute_cate_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
+        contexts = contexts.cuda() if self.config.cuda else contexts
+        diff = lambda treat, no_treat: treat - no_treat
+
+        results = [net(contexts) for net in self.ensemble]
+        results = [mu[1] - mu[0] for mu in results]
 
         results = torch.stack(results).squeeze().var(dim=0)
         return results

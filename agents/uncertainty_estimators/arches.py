@@ -56,7 +56,7 @@ class ConvNet(nn.Module):
             treat_sigma += 1e-7
             no_treat_sigma += 1e-7
 
-        return (treat_mu, no_treat_mu), (treat_sigma, no_treat_sigma)
+        return (no_treat_mu, treat_mu), (no_treat_sigma, treat_sigma )
 
 
     def __repr__(self):
@@ -85,7 +85,7 @@ class ResNet(nn.Module):
             treat_sigma += 1e-7
             no_treat_sigma += 1e-7
 
-        return (treat_mu, no_treat_mu), (treat_sigma, no_treat_sigma)
+        return (no_treat_mu, treat_mu), (no_treat_sigma, treat_sigma )
 
 
     def __repr__(self):

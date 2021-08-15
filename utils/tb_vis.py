@@ -43,6 +43,7 @@ class TensorBoardVis:
         # errors
         ite_pred, _ = agent.estimator(env.digit_contexts)
         env_ite = env.ite.cuda() if self.config.cuda else env.ite 
+        
         errors = env_ite - ite_pred
 
         treat_err = self.make_scalar_dict(errors[1, :], env.causal_ids, env.config.num_arms)
@@ -53,6 +54,30 @@ class TensorBoardVis:
         
         mse = torch.pow(errors, 2).mean()
         self.writer.add_scalar('General/ITE MSE', mse, timestep.id)
+
+    def collect_cate(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep ):
+        
+        ite_pred, _ = agent.estimator(env.digit_contexts)
+        env_ite = env.ite.cuda() if self.config.cuda else env.ite 
+        
+        true_cate  =  env_ite[1, :] -   env_ite[0, :]  
+        pred_cate  = ite_pred[1, :] -  ite_pred[0, :]
+
+        # cate errors 
+        cate_errors = true_cate - pred_cate
+        d = self.make_scalar_dict(cate_errors, env.causal_ids, env.config.num_arms)
+        self.writer.add_scalars('General/CATE Errors', d, timestep.id)
+
+
+        cate_mse = torch.pow(cate_errors, 2).mean()
+        self.writer.add_scalar('General/CATE MSE', cate_mse, timestep.id)
+
+        # cate uncertainteis 
+        cate_unc = agent.estimator.compute_cate_uncertainty(env.digit_contexts)
+        d = self.make_scalar_dict(cate_unc, env.causal_ids, env.config.num_arms)
+        self.writer.add_scalars('General/CATE Uncertainty', d, timestep.id)
+
+
 
 
     def collect_arm_distributions(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):

@@ -1,3 +1,4 @@
+
 from typing import Tuple, List
 from dataclasses import dataclass, field
 import numpy as np
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class CausalAgentConfig:
+class CATEAgentConfig:
     Arch: nn.Module = None
     Estimator: estimators.BaseEstimator = None
 
@@ -39,13 +40,13 @@ class CausalAgentConfig:
     fixed_sigma: bool = False
     causal_ids: List[int] = None
     
-class CausalAgent(BaseAgent):
+class CATEAgent(BaseAgent):
     """
     half the round we learn by empty interventions
     the other times we learn by choosing based on epsitemic uncertainty
     we evaluate by regret. 
     """
-    def __init__(self, config: CausalAgentConfig): # not quite variational agent config
+    def __init__(self, config: CATEAgentConfig): # not quite variational agent config
         # learning is the ITE of causal arms
         assert config.causal_ids is not None
         self.config = config
@@ -72,17 +73,14 @@ class CausalAgent(BaseAgent):
             logger.info(f'[{e}] training finished') # TODO print losss
         
     def act(self, timestep: Timestep):
-        uncertaitnties = self.compute_digit_uncertainties(timestep.context)
-        # given contexts what combination of treatments would be most interesting??
-        # how to get that?
-        # mechanism for combinations of things, 
+        uncertaitnties = self.estimator.compute_uncertainty(timestep.context)
         loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
         intervention = loc[1] + len(timestep.context)* loc[0]
         return intervention.item()
     
 
     def compute_digit_uncertainties(self, contexts: torch.Tensor):
-        variances = self.estimator.compute_uncertainty(contexts)
+        variances = self.estimator.compute_cate_uncertainty(contexts)
         return variances 
 
     def compute_digit_distributions(self, contexts: torch.Tensor):
@@ -95,7 +93,7 @@ class CausalAgent(BaseAgent):
         return best_action
 
     
-    def make_decounfound(self):
+    def make_decounfound(self): # TODO: shall this change?
 
         def deconfound(contexts, treatments,  ts_causal_ids, effects):
             with torch.no_grad():
