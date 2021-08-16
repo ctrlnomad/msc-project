@@ -38,6 +38,7 @@ class VariationalAgentConfig:
 
     do_nothing: float = 0.5 # do nothing for this proportion of steps
     cuda: bool = False
+    fixed_sigma: bool = False
     batch_size:int = 32
 
 
