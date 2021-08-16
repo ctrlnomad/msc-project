@@ -53,7 +53,7 @@ class CATEAgent(BaseAgent):
 
         self.memory = deque(maxlen=config.memsize)
 
-        self.estimator = config.Estimator(config.Arch, config, self.make_decounfound())
+        self.estimator = config.Estimator(config.Arch, config, self.make_decounfound(), CATE=True)
         
 
     def observe(self, timestep: Timestep):
@@ -93,14 +93,17 @@ class CATEAgent(BaseAgent):
         return best_action
 
     
-    def make_decounfound(self): # TODO: shall this change?
+    def make_decounfound(self): 
 
         def deconfound(contexts, treatments,  ts_causal_ids, effects):
+
             with torch.no_grad():
                 bs = len(contexts)
 
                 causal_idxs = torch.nonzero(ts_causal_ids, as_tuple=False)
                 causal_treatments = torch.masked_select(treatments, ts_causal_ids.bool())
+                
+                cate_effects = torch.repeat_interleave(effects, self.config.num_arms)
 
                 if causal_idxs.nelement() == 0:
                     effects = torch.zeros(bs, self.config.num_arms)
@@ -109,20 +112,23 @@ class CATEAgent(BaseAgent):
                 confounding_contexts = torch.stack([contexts[bidx, sidx] for bidx, sidx in causal_idxs])
                 mu_pred, _ = self.estimator(confounding_contexts)
 
-                deconfounded_effects  = torch.zeros(bs, self.config.num_arms)
+                causal_treatments = (~causal_treatments.bool()).long()
+                causal_treatments = causal_treatments.unsqueeze(1)
 
-                if self.config.cuda:
-                    deconfounded_effects = deconfounded_effects.cuda()
-
-                if len(mu_pred.shape) != len(causal_treatments[None].shape):
+                if len(mu_pred.shape) != len(causal_treatments.shape):
                     mu_pred = mu_pred.unsqueeze(1)
 
-                mu_pred = mu_pred.gather(0, causal_treatments[None]).squeeze()
-  
-                for i in range(bs):
-                    total_batch_effect = torch.masked_select(mu_pred ,causal_idxs[:, 0] == i)
-                    deconfounded_effects[i, ts_causal_ids[i]] = effects[i] - (total_batch_effect.sum() - total_batch_effect)
+                mu_pred = mu_pred.gather(0, causal_treatments).squeeze()
 
-                return deconfounded_effects
+                reverse_effects  = torch.zeros(bs, self.config.num_arms)
+                if self.config.cuda:
+                    reverse_effects = reverse_effects.cuda()
+
+                reverse_effects[ts_causal_ids.bool()] = mu_pred
+                reverse_effects = reverse_effects.flatten()
+                
+                cate_effects -= reverse_effects
+
+                return cate_effects
 
         return deconfound

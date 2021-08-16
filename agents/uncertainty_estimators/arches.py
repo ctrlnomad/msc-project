@@ -138,3 +138,41 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
     
     return losses
 
+
+def cate_train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
+            config, deconfound: Callable = None) -> List[float]: 
+
+    losses = []
+
+    for contexts, treatments, causal_ids, effects in loader:
+        opt.zero_grad()
+        
+        contexts = contexts.cuda() if config.cuda else contexts
+        effects = effects.cuda() if config.cuda else effects
+        treatments = treatments.cuda() if config.cuda else treatments
+        causal_ids = causal_ids.cuda() if config.cuda else causal_ids
+
+
+        if deconfound:
+            effects = deconfound(contexts, treatments, causal_ids, effects)
+        else:
+            effects = torch.repeat_interleave(effects, config.num_arms)
+            
+        contexts = contexts.view(-1, *config.dim_in)
+        treatments = treatments.flatten()
+
+        mu_pred, sigma_pred = model(contexts, add_delta=True)
+
+        cate_pred = mu_pred[1] - mu_pred[0]
+
+        sigma_pred = torch.ones_like(sigma_pred[0]) * 0.1
+        sigma_mat_pred = utils.to_diag_var(sigma_pred, cuda=config.cuda)
+
+        loss = -D.MultivariateNormal(cate_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
+
+        loss.backward()
+        opt.step()
+
+        losses.append(loss.item()) # better way of doing this tho
+    
+    return losses

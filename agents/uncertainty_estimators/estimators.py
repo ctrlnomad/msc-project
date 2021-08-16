@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from agents.uncertainty_estimators.arches import train_loop
+from agents.uncertainty_estimators.arches import train_loop, cate_train_loop
 
 class BaseEstimator:
     def __init__(self, make: Callable, config, deconfound_fn: Callable) -> None: # potentially a summary writer, shall pass inconfig?
@@ -29,7 +29,7 @@ class BaseEstimator:
 
 
 class DropoutEstimator(BaseEstimator):
-    def __init__(self, make: Callable, config, deconfound_fn: Callable = None) -> None:
+    def __init__(self, make: Callable, config, deconfound_fn: Callable = None, CATE=False) -> None:
         super().__init__(make, config, deconfound_fn)
         self.net = make(self.config) 
 
@@ -37,6 +37,7 @@ class DropoutEstimator(BaseEstimator):
             self.net = self.net.cuda()
 
         self.opt = optim.Adam(self.net.parameters())
+        self.train_fn = cate_train_loop if CATE else train_loop
 
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
         # compute entropy with dropout
@@ -71,7 +72,7 @@ class DropoutEstimator(BaseEstimator):
         return result.var(dim=-1)
 
     def train(self, loader):
-        return train_loop(self.net, loader, self.opt, self.config, deconfound=self.deconfound_fn)
+        return self.train_fn(self.net, loader, self.opt, self.config, deconfound=self.deconfound_fn)
 
     def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
         self.net.eval()
@@ -83,13 +84,13 @@ class DropoutEstimator(BaseEstimator):
 
 
 class EnsembleEstimator(BaseEstimator):
-    def __init__(self, make: Callable, config, deconfound_fn: Callable = None) -> None: 
+    def __init__(self, make: Callable, config, deconfound_fn: Callable = None, CATE = False) -> None: 
         super().__init__(make, config, deconfound_fn)
         self.ensemble = [make(config) for _ in range(self.config.ensemble_size)]
 
         if self.config.cuda:
             self.ensemble = [n.cuda() for n in self.ensemble]
-
+        self.train_fn = cate_train_loop if CATE else train_loop
         self.opt_cls = optim.Adam
         self.opts = [self.opt_cls(n.parameters()) for n in self.ensemble]
         
@@ -116,7 +117,7 @@ class EnsembleEstimator(BaseEstimator):
         losses = [[] for _ in range(self.config.ensemble_size)]
         
         for i in range(self.config.ensemble_size):
-            losses[i].append(train_loop(self.ensemble[i], loader, self.opts[i], self.config, deconfound=self.deconfound_fn))
+            losses[i].append(self.train_fn(self.ensemble[i], loader, self.opts[i], self.config, deconfound=self.deconfound_fn))
         
         return losses
 
