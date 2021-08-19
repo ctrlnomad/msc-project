@@ -26,7 +26,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 @dataclass
-class VariationalAgentConfig:
+class ATEAgentConfig:
     Arch: nn.Module = None
     Estimator: estimators.BaseEstimator = None
 
@@ -41,13 +41,13 @@ class VariationalAgentConfig:
     batch_size:int = 32
 
 
-class VariationalAgent(BaseAgent):
+class ATEAgent(BaseAgent):
     """
     half the round we learn by empty interventions
     the other times we learn by choosing based on epsitemic uncertainty
     we evaluate by regret. 
     """
-    def __init__(self, config: VariationalAgentConfig): # not quite variational agent config
+    def __init__(self, config: ATEAgentConfig): # not quite variational agent config
         # learning is the ITE of causal arms
         self.memory = deque(maxlen=config.memsize)
 

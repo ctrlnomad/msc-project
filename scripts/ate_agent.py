@@ -9,10 +9,10 @@ import numpy as np
 from dataclasses import dataclass
 
 from causal_env.envs import CausalMnistBanditsConfig
-from agents import VariationalAgent, VariationalAgentConfig
+from agents import ATEAgent, ATEAgentConfig
 from argparse_dataclass import ArgumentParser
 
-from utils.tb_vis import TensorBoardVis
+from utils.wb_vis import WBVis
 
 from tqdm import tqdm
 import logging
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Options(CausalMnistBanditsConfig, VariationalAgentConfig):
+class Options(CausalMnistBanditsConfig, ATEAgentConfig):
   seed: int = 5000
   debug: bool = False
 
@@ -55,9 +55,8 @@ if __name__ == '__main__':
     logger.warning(config)
     logger.warning(mnist_env)
 
-    agent = VariationalAgent(config)
-    vis = TensorBoardVis(config)
-    vis.record_experiment(mnist_env, agent, config)
+    agent = ATEAgent(config)
+    vis = WBVis(config)
 
     timestep = mnist_env.reset()
 
@@ -79,6 +78,8 @@ if __name__ == '__main__':
             agent.train()
 
             pbar.update(1)
+
+    vis.finish()
 
     
 

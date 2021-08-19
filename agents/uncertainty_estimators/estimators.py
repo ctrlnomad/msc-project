@@ -26,6 +26,10 @@ class BaseEstimator:
     def compute_cate_uncertainty(self, contexts: torch.Tensor): # -> compute ite-uncertainty
         raise NotImplementedError()
 
+    @property
+    def models(self):
+        raise NotImplementedError()
+
 
 
 class DropoutEstimator(BaseEstimator):
@@ -81,6 +85,9 @@ class DropoutEstimator(BaseEstimator):
         return torch.stack(mu).squeeze(), torch.stack(sigma).squeeze()
 
 
+    @property
+    def models(self):
+        return self.net
 
 
 class EnsembleEstimator(BaseEstimator):
@@ -134,3 +141,7 @@ class EnsembleEstimator(BaseEstimator):
         sigma =  sigmas.mean(dim=0) + mu.var(dim=0) # total variance
         for m in self.ensemble: m.train()
         return mu, sigma
+
+    @property
+    def models(self):
+        return self.ensemble

@@ -6,3 +6,4 @@ figures/
 gym-bandits/
 explogs/
 runs/
+wandb/
