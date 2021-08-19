@@ -155,11 +155,11 @@ def cate_train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
 
         if deconfound:
             effects = deconfound(contexts, treatments, causal_ids, effects)
+            effects = effects.flatten()
         else:
             effects = torch.repeat_interleave(effects, config.num_arms)
             
         contexts = contexts.view(-1, *config.dim_in)
-        treatments = treatments.flatten()
 
         mu_pred, sigma_pred = model(contexts, add_delta=True)
 
