@@ -155,12 +155,15 @@ class MetaCausalEstimator(BaseEstimator):
         super().__init__(None, config, None)
 
         self.net = ConvNet(config, causal_model=True)
+        if self.config.cuda:
+            self.net = self.net.cuda()
         self.opt = optim.Adam(self.net.parameters())
 
-    def compute_beliefs(self, contexts): # E-step
+    def compute_beliefs(self, contexts, return_proba=False): # E-step
         flat_contexts = contexts.view(-1, *self.config.dim_in) #  TODO? does this work
         _, _, causal_ids = self.net(flat_contexts)
-
+        if return_proba:
+            return causal_ids 
         causal_context_ids = (causal_ids > 0.5).squeeze().view(*contexts.shape[:2])
 
         return causal_context_ids

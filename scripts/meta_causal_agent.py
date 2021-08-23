@@ -32,7 +32,6 @@ class Options(CausalMnistBanditsConfig, MetaCausalAgentConfig):
 
   log_file: str = None
 
-  telemetry_dir: str = None
   telemetry_every: int = 1 
 
 
@@ -62,6 +61,7 @@ if __name__ == '__main__':
             if timestep.id % config.telemetry_every == 0:
                 vis.collect(agent, mnist_env, timestep)
                 vis.collect_arm_distributions(agent, mnist_env, timestep)
+                vis.collect_beliefs(mnist_env, agent, timestep)
 
             if config.num_ts * config.do_nothing < timestep.id:
                 op = agent.act(timestep)
