@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.distributions as D
-from torch.distributions.mixture_same_family import MixtureSameFamily
+import torch.distributions as Ds
 import torch.nn.functional as F
 
 import torchvision.models as models
@@ -26,13 +25,15 @@ class EffectNet(nn.Module):
 
     def forward(self, x):
         emb = self.emb(x)
-        return self.mu(emb),  F.relu(self.sigma(emb))
+        sigma = 1e-7 + torch.sigmoid(self.sigma(emb))
+        return self.mu(emb), sigma
 
 class ConvNet(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, causal_model=False):
         super().__init__()
         self.dropout_rate = config.dropout_rate
+        self.causal_model = causal_model
         self.conv_block = nn.Sequential(
             nn.Conv2d(1, 10, kernel_size=5),
             nn.MaxPool2d(2),
@@ -45,22 +46,31 @@ class ConvNet(nn.Module):
         
         self.treat = EffectNet(320, dropout_rate=self.dropout_rate)
         self.no_treat = EffectNet(320, dropout_rate=self.dropout_rate)
+        if  self.causal_model :
+            self.struct =  nn.Sequential(
+                nn.Linear(320, 25),
+                nn.ELU(),
+                nn.Dropout(p=self.dropout_rate),
+                nn.Linear(25, 1),
+                nn.Sigmoid())
 
-    def forward(self, x, add_delta=True):
+    def forward(self, x, add_delta=True, ):
         emb = self.conv_block(x)
 
         treat_mu, treat_sigma = self.treat(emb)
         no_treat_mu, no_treat_sigma = self.no_treat(emb)
+    
 
-        if add_delta:
-            treat_sigma += 1e-7
-            no_treat_sigma += 1e-7
-
-        return (no_treat_mu, treat_mu), (no_treat_sigma, treat_sigma )
+        if self.causal_model:
+            gamma = self.struct(emb)
+            return (no_treat_mu, treat_mu), (no_treat_sigma, treat_sigma), gamma 
+        else:
+            return (no_treat_mu, treat_mu), (no_treat_sigma, treat_sigma),
 
 
     def __repr__(self):
         return "ConvNet"
+
         
 
 class ResNet(nn.Module): 

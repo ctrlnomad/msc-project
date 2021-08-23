@@ -3,11 +3,13 @@ from typing import Callable, List
 
 import torch
 
+import torch.distributions as D
+import utils
 
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from agents.uncertainty_estimators.arches import train_loop, cate_train_loop
+from agents.uncertainty_estimators.arches import ConvNet, train_loop, cate_train_loop
 
 class BaseEstimator:
     def __init__(self, make: Callable, config, deconfound_fn: Callable) -> None: # potentially a summary writer, shall pass inconfig?
@@ -145,3 +147,115 @@ class EnsembleEstimator(BaseEstimator):
     @property
     def models(self):
         return self.ensemble
+
+
+
+class MetaCausalEstimator(BaseEstimator):
+    def __init__(self, config) -> None:
+        super().__init__(None, config, None)
+
+        self.net = ConvNet(config, causal_model=True)
+        self.opt = optim.Adam(self.net.parameters())
+
+    def compute_beliefs(self, contexts): # E-step
+        flat_contexts = contexts.view(-1, *self.config.dim_in) #  TODO? does this work
+        _, _, causal_ids = self.net(flat_contexts)
+
+        causal_context_ids = (causal_ids > 0.5).squeeze().view(*contexts.shape[:2])
+
+        return causal_context_ids
+
+        
+    def train(self, loader): # put training loop inside here?
+
+        for contexts, treatments, _, effects in loader:
+            self.opt.zero_grad()
+            
+            contexts = contexts.cuda() if self.config.cuda else contexts
+            effects = effects.cuda() if self.config.cuda else effects
+            treatments = treatments.cuda() if self.config.cuda else treatments
+
+            causal_model = self.compute_beliefs(contexts)
+            effects = self.deconfound(causal_model, contexts, treatments, effects)
+            effects = effects.flatten()
+
+            contexts = contexts.view(-1, *self.config.dim_in)
+            treatments = treatments.flatten()
+
+            mu_pred, sigma_pred, _ = self.net(contexts)
+
+            mu_pred = torch.stack(mu_pred).squeeze()
+            sigma_pred = torch.stack(sigma_pred).squeeze()
+
+            mu_pred = mu_pred.gather(0, treatments[None]) # 2, num_arms
+            sigma_pred = sigma_pred.gather(0, treatments[None])
+
+            if self.config.fixed_sigma:
+                sigma_pred = torch.ones_like(sigma_pred) * 0.1
+
+            sigma_mat_pred = utils.to_diag_var(sigma_pred, cuda=self.config.cuda)
+
+            loss = -D.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
+
+            loss.backward()
+            self.opt.step()
+
+        return loss.item()
+
+
+    def deconfound(self, causal_model, contexts, treatments, effects):
+        with torch.no_grad():
+            bs = len(contexts)
+
+            causal_idxs = torch.nonzero(causal_model, as_tuple=False)
+            causal_treatments = torch.masked_select(treatments, causal_model)
+
+            if causal_idxs.nelement() == 0:
+                effects = torch.zeros(bs, self.config.num_arms)
+                return effects.cuda() if self.config.cuda else effects
+
+            confounding_contexts = torch.stack([contexts[bidx, sidx] for bidx, sidx in causal_idxs])
+            mu_pred = self(confounding_contexts)[0]
+
+            deconfounded_effects  = torch.zeros(bs, self.config.num_arms)
+
+            if self.config.cuda:
+                deconfounded_effects = deconfounded_effects.cuda()
+
+            if len(mu_pred.shape) != len(causal_treatments[None].shape):
+                mu_pred = mu_pred.unsqueeze(1)
+
+            mu_pred = mu_pred.gather(0, causal_treatments[None]).squeeze()
+
+            for i in range(bs):
+                total_batch_effect = torch.masked_select(mu_pred ,causal_idxs[:, 0] == i)
+                deconfounded_effects[i, causal_model[i]] = effects[i] - (total_batch_effect.sum() - total_batch_effect)
+
+            return deconfounded_effects
+
+    def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
+        self.net.eval()
+        mu, sigma, proba = self.net(contexts)
+        self.net.train()
+        return torch.stack(mu).squeeze(), torch.stack(sigma).squeeze(), proba
+
+
+    def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
+        # compute entropy with dropout
+        bs = len(contexts)
+        result = torch.zeros((2, bs, self.config.mc_samples))
+        if self.config.cuda:
+            result = result.cuda()
+            contexts = contexts.cuda()
+
+        for i in range(self.config.mc_samples):
+            effects = self.net(contexts)[0]
+            effects = torch.stack(effects).squeeze()
+            if bs ==1: # hack
+                effects = effects[None].T
+            result[..., i] = effects
+        return result.var(dim=-1) # Var[E[Y | X]]
+
+    @property
+    def models(self):
+        return self.net

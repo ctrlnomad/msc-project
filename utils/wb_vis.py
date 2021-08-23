@@ -20,7 +20,7 @@ class WBVis:
             config=config,
             notes=str(env))
 
-        self.run.watch(agent.estimator.models, log='ALL',  log_freq=1)
+        self.run.watch(agent.estimator.models, log='ALL',  log_freq=5)
 
         def log_dict(tag, tensor, step):
             d = dict()
@@ -34,6 +34,10 @@ class WBVis:
 
     def collect(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         unc = agent.compute_digit_uncertainties(env.digit_contexts)    
+        # beliefs
+
+        # losses 
+
 
         if unc is not None:
             unc = safenumpy(unc)
@@ -47,7 +51,7 @@ class WBVis:
         wandb.log({'General/Regret': regret}, step=timestep.id) # useless for now
 
         # errors
-        ite_pred, _ = agent.estimator(env.digit_contexts)
+        ite_pred = agent.estimator(env.digit_contexts)[0]
         env_ite = env.ite.cuda() if self.config.cuda else env.ite 
         errors = env_ite - ite_pred
 
@@ -68,6 +72,10 @@ class WBVis:
         self.log_dict('NoTreatment/Means', means[0, :],step=timestep.id)
         self.log_dict('Treatment/Variances', variances[1, :],step=timestep.id)
         self.log_dict('NoTreatment/Variances', variances[0, :],step=timestep.id)
+
+    def collect_beliefs(self,  env,  agent):
+        beliefs = agent.estimator.compute_beliefs(env.digit_contexts)
+        self.run.log({'Causal Model Beliefs': wandb.Histogram(beliefs)})
 
     def finish(self):
         wandb.finish()

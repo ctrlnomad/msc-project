@@ -1,9 +1,8 @@
 from typing import Tuple, List
 from dataclasses import dataclass, field
 import numpy as np
-
 from collections import deque
-from functools import partial
+from numpy.core.fromnumeric import nonzero
 
 import torch
 import torch.nn as nn
@@ -16,17 +15,14 @@ import torch.distributions as distributions
 from causal_env.envs import Timestep, TimestepDataset
 from agents.base_agent import BaseAgent
 
-import agents.uncertainty_estimators.arches as arches
-import agents.uncertainty_estimators.estimators as estimators
-
-import utils
-import utils.mnist 
+import  agents.uncertainty_estimators.estimators as estimators
 
 import logging
 logger = logging.getLogger(__name__)
 
+
 @dataclass
-class ATEAgentConfig:
+class MetaCausalAgentConfig:
     Arch: nn.Module = None
     Estimator: estimators.BaseEstimator = None
 
@@ -38,25 +34,22 @@ class ATEAgentConfig:
 
     do_nothing: float = 0.5 # do nothing for this proportion of steps
     cuda: bool = False
-    fixed_sigma: bool = False
     batch_size:int = 32
 
-
-class ATEAgent(BaseAgent):
+    fixed_sigma: bool = False
+    causal_ids: List[int] = None
+    
+class MetaCausalAgent(BaseAgent):
     """
-    half the round we learn by empty interventions
-    the other times we learn by choosing based on epsitemic uncertainty
-    we evaluate by regret. 
+    Works for one causal arm
     """
-    def __init__(self, config: ATEAgentConfig): # not quite variational agent config
+    def __init__(self, config: MetaCausalAgentConfig): # not quite variational agent config
         # learning is the ITE of causal arms
-        self.memory = deque(maxlen=config.memsize)
-
-        self.estimator = config.Estimator(config.Arch, config)
         self.config = config
 
-        self.digit_sampler = utils.mnist.MnistSampler()
-        
+        self.memory = deque(maxlen=config.memsize)
+
+        self.estimator = estimators.MetaCausalEstimator(config)
 
     def observe(self, timestep: Timestep):
         self.memory.append(timestep)
@@ -66,17 +59,15 @@ class ATEAgent(BaseAgent):
             logger.info('agent not training, not enough data')
             return 
 
-        dataset = TimestepDataset(self.memory)
-
-        if self.config.batch_size < 0:
-            self.config.batch_size = len(dataset)
-            
+        dataset = TimestepDataset(self.memory) # deconfound
         loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
-
+        # we need to calculate the log likelihoods over the ten models
         for e in range(n_epochs):
             logger.info(f'[{e}] starting training ...')
-            losses = self.estimator.train(loader)
-            logger.info(f'[{e}] training finished') # TODO  print losss
+            self.estimator.train(loader)
+            logger.info(f'[{e}] training finished')
+
+
         
     def act(self, timestep: Timestep):
         uncertaitnties = self.compute_digit_uncertainties(timestep.context)
@@ -90,10 +81,12 @@ class ATEAgent(BaseAgent):
         return variances 
 
     def compute_digit_distributions(self, contexts: torch.Tensor):
-        return self.estimator(contexts)
+        mus, sigmas, _ = self.estimator(contexts)
+        return mus, sigmas
 
     def compute_best_action(self, contexts: torch.Tensor):
-        mu, _ = self.estimator(contexts)
+        mu, _, _= self.estimator(contexts)
 
         best_action = (mu.max() == mu).nonzero().squeeze()
         return best_action
+
