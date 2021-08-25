@@ -1,16 +1,10 @@
 from typing import Tuple, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import numpy as np
 from collections import deque
-from numpy.core.fromnumeric import nonzero
 
 import torch
 import torch.nn as nn
-from torch.nn.modules import utils
-import torch.optim as optim
-
-from torch.utils.data import DataLoader
-import torch.distributions as distributions
 
 from causal_env.envs import Timestep, TimestepDataset
 from agents.base_agent import BaseAgent
@@ -40,16 +34,14 @@ class MetaCausalAgentConfig:
     causal_ids: List[int] = None
     
 class MetaCausalAgent(BaseAgent):
-    """
-    Works for one causal arm
-    """
+
     def __init__(self, config: MetaCausalAgentConfig): # not quite variational agent config
         # learning is the ITE of causal arms
         self.config = config
 
         self.memory = deque(maxlen=config.memsize)
 
-        self.estimator = estimators.MetaCausalEstimator(config)
+        self.estimator = estimators.StructEstimator(config)
 
     def observe(self, timestep: Timestep):
         self.memory.append(timestep)
@@ -59,14 +51,12 @@ class MetaCausalAgent(BaseAgent):
             logger.info('agent not training, not enough data')
             return 
 
-        dataset = TimestepDataset(self.memory) # deconfound
-        loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
-        # we need to calculate the log likelihoods over the ten models
+        dataset = TimestepDataset(self.memory)
+        
         for e in range(n_epochs):
             logger.info(f'[{e}] starting training ...')
-            self.estimator.train(loader)
+            self.estimator.train(dataset)
             logger.info(f'[{e}] training finished')
-
 
         
     def act(self, timestep: Timestep):
@@ -81,12 +71,18 @@ class MetaCausalAgent(BaseAgent):
         return variances 
 
     def compute_digit_distributions(self, contexts: torch.Tensor):
-        mus, sigmas, _ = self.estimator(contexts)
+        mus, sigmas = self.estimator(contexts)
         return mus, sigmas
 
     def compute_best_action(self, contexts: torch.Tensor):
-        mu, _, _= self.estimator(contexts)
+        mu, _ = self.estimator(contexts)
 
         best_action = (mu.max() == mu).nonzero().squeeze()
         return best_action
 
+
+    def compute_structural_entropy(self,):
+        pass
+
+    def compute_causal_contexts(self,):
+        pass

@@ -1,4 +1,3 @@
-from agents.uncertainty_estimators.estimators import MetaCausalEstimator
 import torch
 torch.autograd.set_detect_anomaly(True)
 
@@ -28,13 +27,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Options(CausalMnistBanditsConfig, MetaCausalAgentConfig):
   seed: int = 5000
-  debug: bool = False
-
-  log_file: str = None
-
-  telemetry_dir: str = None
-  telemetry_every: int = 1 
-
+  
+  log_every: int = 1 
 
 
 
@@ -53,13 +47,13 @@ if __name__ == '__main__':
 
     agent = MetaCausalAgent(config)
     
-    vis = WBVis(config, agent, mnist_env)
+    vis = WBVis(config, agent, mnist_env) if config.log_every > 0 else None
     timestep = mnist_env.reset()
 
     with tqdm(total=config.num_ts) as pbar:
         while not timestep.done:
 
-            if timestep.id % config.telemetry_every == 0:
+            if config.log_every > 0 and  timestep.id % config.telemetry_every == 0:
                 vis.collect(agent, mnist_env, timestep)
                 vis.collect_arm_distributions(agent, mnist_env, timestep)
 
@@ -75,5 +69,6 @@ if __name__ == '__main__':
 
             pbar.update(1)
 
-    vis.finish()
+    if config.log_every > 0: 
+        vis.finish()
 

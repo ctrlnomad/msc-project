@@ -22,7 +22,7 @@ class CausalMnistBanditsConfig:
     num_arms: int = 10
     causal_arms: int = 4
 
-    num_ts: int = 100_000
+    num_ts: int = 1_000
 
     scale_divider: int = 1
     loc_multiplier: int = 50
