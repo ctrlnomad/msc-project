@@ -136,6 +136,10 @@ class StructEstimator:
     def __init__(self, config) -> None:
         self.config = config
         self.net = StructNet(config)
+
+        if self.config.cuda:
+            self.net = self.net.cuda()
+
         self.opt = optim.Adam(self.net.parameters())
 
         self.effect_estimator = EffectEstimator(config, self.net)
@@ -177,9 +181,10 @@ class StructEstimator:
 
 class EffectEstimator(DropoutEstimator):
     def __init__(self, config, causal_model: torch.nn.Module) -> None:
-        super()
         self.config = config
         self.net = EffectNet(config)
+        if self.config.cuda:
+            self.net = self.net.cuda()
         self.opt = optim.Adam(self.net.parameters())
 
         self.causal_model = causal_model
@@ -221,6 +226,11 @@ class EffectEstimator(DropoutEstimator):
         return loss
 
     def compute_ll(self, contexts, treatments, effects):
+
+        contexts = contexts.cuda() if self.config.cuda else contexts
+        effects = effects.cuda() if self.config.cuda else effects
+        treatments = treatments.cuda() if self.config.cuda else treatments
+
         effects = self.deconfound(contexts, treatments, effects)
 
         effects = effects.flatten()

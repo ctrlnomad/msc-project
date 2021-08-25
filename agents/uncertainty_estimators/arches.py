@@ -108,6 +108,10 @@ class StructNet(nn.Module):
         self.conv_net = ConvBlock(config)
 
     def proc_dataset(self, contexts, treatments, effects):
+        contexts = contexts.cuda() if self.config.cuda else contexts
+        effects = effects.cuda() if self.config.cuda else effects
+        treatments = treatments.cuda() if self.config.cuda else treatments
+
         effects = effects.unsqueeze(1)
         bs = treatments.shape[1]
         treatments = treatments.view(-1, 1)
