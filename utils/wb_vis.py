@@ -73,9 +73,11 @@ class WBVis:
         self.log_dict('Treatment/Variances', variances[1, :],step=timestep.id)
         self.log_dict('NoTreatment/Variances', variances[0, :],step=timestep.id)
 
-    def collect_beliefs(self,  env,  agent):
-        beliefs = agent.estimator.compute_beliefs(env.digit_contexts)
-        self.run.log({'Causal Model Beliefs': wandb.Histogram(beliefs)})
+    def collect_beliefs(self,  env,  agent, timestep):
+        contexts = env.digit_contexts
+        beliefs = safenumpy(agent.estimator.compute_beliefs(contexts, return_proba=True)).squeeze()
+
+        self.log_dict('Causal Model', beliefs, step=timestep.id)
 
     def finish(self):
         wandb.finish()

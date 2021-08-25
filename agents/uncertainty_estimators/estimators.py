@@ -154,6 +154,7 @@ class StructEstimator:
         contexts, treatments, _, effects = next(iter(DataLoader(dataset, batch_size=len(dataset), shuffle=True)))
         ll = self.effect_estimator.compute_ll(contexts, treatments, effects) # with the trained thing
 
+
         flat_contexts = contexts.view(-1, *self.config.dim_in)
         causal_probabilities = self.net(flat_contexts)
 
@@ -161,6 +162,7 @@ class StructEstimator:
         prior = D.Bernoulli(torch.ones_like(causal_probabilities) * 1e-4)
 
         kl = D.kl_divergence(post, prior).sum()
+
 
         loss = ll + kl
         loss.backward()
