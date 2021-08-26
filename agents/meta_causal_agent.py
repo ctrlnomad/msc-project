@@ -32,6 +32,8 @@ class MetaCausalAgentConfig:
 
     fixed_sigma: bool = False
     causal_ids: List[int] = None
+
+    prior: float = 1e-4
     
 class MetaCausalAgent(BaseAgent):
 
@@ -46,7 +48,7 @@ class MetaCausalAgent(BaseAgent):
     def observe(self, timestep: Timestep):
         self.memory.append(timestep)
 
-    def train(self, n_epochs:int=1):
+    def train(self, n_epochs: int=1):
         if len(self.memory) <= self.config.batch_size:
             logger.info('agent not training, not enough data')
             return 

@@ -132,6 +132,8 @@ class EnsembleEstimator(BaseEstimator):
     @property
     def models(self):
         return self.ensemble
+
+
 class StructEstimator:
     def __init__(self, config) -> None:
         self.config = config
@@ -145,42 +147,61 @@ class StructEstimator:
         self.effect_estimator = EffectEstimator(config, self.net)
 
         
-    def train(self, dataset):
-        self.opt.zero_grad()
+    def train(self, dataset, num_epochs=2):
 
         contexts, treatments, _, effects = next(iter(DataLoader(dataset, batch_size=len(dataset), shuffle=True)))
         
         self.net.proc_dataset(contexts, treatments, effects)
         
         # freeze the struct model?
-        self.effect_estimator = EffectEstimator(self.config, self.net)
-        self.effect_estimator.train(dataset) # a new effect estimator trained to convergence 
-        
-        contexts, treatments, _, effects = next(iter(DataLoader(dataset, batch_size=len(dataset), shuffle=True)))
-        ll = self.effect_estimator.compute_ll(contexts, treatments, effects) # with the trained thing
+        # inner loop, freeze?
 
+        self.effect_estimator = EffectEstimator(self.config, self.net)
+        self.effect_estimator.train(dataset, num_epochs=num_epochs, use_causal=True) # a new effect estimator trained to convergence 
+        nll = self.effect_estimator.compute_nll(contexts, treatments, effects) # compute LL with the entire dataset
+
+        self.effect_estimator.train(dataset, num_epochs=num_epochs, use_zero=True) # a new effect estimator trained to convergence 
+        nll = self.effect_estimator.compute_nll(contexts, treatments, effects) # compute LL with the entire dataset
+
+        # outer loop        
+        contexts, treatments, _, effects = next(iter(DataLoader(dataset, batch_size=len(dataset), shuffle=True)))
+        nll = self.effect_estimator.compute_nll(contexts, treatments, effects) # compute LL with the entire dataset
+
+        if self.config.cuda:
+            contexts = contexts.cuda()
 
         flat_contexts = contexts.view(-1, *self.config.dim_in)
         causal_probabilities = self.net(flat_contexts)
 
-        post = D.Bernoulli(causal_probabilities)
-        prior = D.Bernoulli(torch.ones_like(causal_probabilities) * 1e-4)
+        post_prob = causal_probabilities
+        prior_prob = torch.ones_like(causal_probabilities) * self.config.prior
 
-        kl = D.kl_divergence(post, prior).sum()
+        if self.config.cuda:
+            post_prob = post_prob.cuda()
+            prior_prob = prior_prob.cuda()
 
+        post = D.Bernoulli(post_prob)
+        prior = D.Bernoulli(prior_prob)
 
-        loss = ll + kl
+        kl = D.kl_divergence(post, prior).mean()
+
+        loss = nll + kl
+
+        self.opt.zero_grad()
         loss.backward()
-
         self.opt.step()
-        return loss.item(), ll.item(), kl.item()
+
+        return loss.item(), nll.item(), kl.item()
 
     @property
     def models(self):
         return [self.net, self.effect_estimator.net]
 
     def compute_beliefs(self, contexts):
-        probas = self.net(contexts)
+        if hasattr(self.net, 'dataset_emb'):
+            probas = self.net(contexts)
+        else:
+            probas = torch.zeros(self.config.num_arms)
         return probas
 
 
@@ -196,23 +217,24 @@ class EffectEstimator(DropoutEstimator):
 
         self.causal_model = causal_model
 
-    def train(self, dataset, num_epochs=2):
+    def train(self, dataset, num_epochs=2, use_causal=False, use_zero=False):
         for _ in range(num_epochs):
-            self.train_once(dataset)
+            self.train_once(dataset, use_causal=use_causal, use_zero=use_zero)
 
-    def train_once(self, dataset):
+    def train_once(self, dataset, use_causal=False, use_zero=False):
 
         loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
 
-        for contexts, treatments, _, effects in loader:
-
+        for contexts, treatments, true_causal, effects in loader:
+            
+                
             contexts = contexts.cuda() if self.config.cuda else contexts
             effects = effects.cuda() if self.config.cuda else effects
             treatments = treatments.cuda() if self.config.cuda else treatments
 
-            effects = self.deconfound(contexts, treatments, effects)
+            effects2 = self.deconfound(contexts, treatments, effects, true_causal=true_causal if use_causal else None)
 
-            effects = effects.flatten()
+            effects3 = effects2.flatten()
             contexts = contexts.view(-1, *self.config.dim_in)
             treatments = treatments.flatten()
 
@@ -221,7 +243,7 @@ class EffectEstimator(DropoutEstimator):
             mu_pred = torch.stack(mu_pred).squeeze()
             sigma_pred = torch.stack(sigma_pred).squeeze()
 
-            mu_pred = mu_pred.gather(0, treatments[None]) # 2, num_arms
+            mu_pred = mu_pred.gather(0, treatments[None])
             sigma_pred = sigma_pred.gather(0, treatments[None])
 
             if self.config.fixed_sigma:
@@ -229,22 +251,23 @@ class EffectEstimator(DropoutEstimator):
 
             sigma_mat_pred = utils.to_diag_var(sigma_pred, cuda=self.config.cuda)
 
-            loss = -D.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
-
+            loss = -D.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects3).mean()
+            
+            self.opt.zero_grad()
             loss.backward()
             self.opt.step()
 
         return loss
 
-    def compute_ll(self, contexts, treatments, effects):
+    def compute_nll(self, contexts, treatments, effects):
 
         contexts = contexts.cuda() if self.config.cuda else contexts
         effects = effects.cuda() if self.config.cuda else effects
         treatments = treatments.cuda() if self.config.cuda else treatments
 
-        effects = self.deconfound(contexts, treatments, effects)
+        effects2 = self.deconfound(contexts, treatments, effects)
 
-        effects = effects.flatten()
+        effects3 = effects2.flatten()
         contexts = contexts.view(-1, *self.config.dim_in)
         treatments = treatments.flatten()
 
@@ -263,38 +286,48 @@ class EffectEstimator(DropoutEstimator):
 
         sigma_mat_pred = utils.to_diag_var(sigma_pred, cuda=self.config.cuda)
 
-        ll = D.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects).mean()
+        nll = -D.MultivariateNormal(mu_pred.squeeze(), sigma_mat_pred).log_prob(effects3).mean()
 
-        return ll
+        return nll
 
-    def deconfound(self,  contexts, treatments, effects):
+    def deconfound(self,  contexts, treatments, effects, true_causal=None):
         # now the idea is different, contexts are scaled to the degree of their causality
-        # freeze(effect_net) ?
+        # freeze(effect_net)
+
+        bs = len(contexts)
+        
+        contexts2 = contexts.clone().detach()
+        flat_contexts = contexts2.view(-1, *self.config.dim_in)
+        causal_probas = self.causal_model(flat_contexts)
+
+        # causal_probas = causal_probas.view(*contexts.shape[:2])
+        dist = D.RelaxedBernoulli(1, probs=causal_probas) # should we sample or can we use directly? TODO
+
+        causal_probas_sample = dist.rsample() 
+
+        causal_sample2 = causal_probas_sample.unsqueeze(-1).repeat([1, 1, 28, 28])
+
+        flat_contexts2 = flat_contexts * causal_sample2
+
         with torch.no_grad():
-            bs = len(contexts)
-            flat_contexts = contexts.view(-1, *self.config.dim_in)
-            causal_probas = self.causal_model(flat_contexts)
+            mu_pred, _ = self.net(flat_contexts2)
 
-            # causal_probas = causal_probas.view(*contexts.shape[:2])
-            dist = D.RelaxedBernoulli(1, probs=causal_probas) # should we sample or can we use directly? TODO
+        mu_pred = torch.stack(mu_pred)
+        mu_pred = mu_pred.view(2, *contexts.shape[:2]) # here we need this to deconfound-timestep
 
-            causal_probas_sample = dist.rsample()
-            
-            for i in range(flat_contexts.shape[0]): # i dont know if there is a better way
-                flat_contexts[i] *= causal_probas_sample[i]
+        deconfounded_effects = torch.zeros(bs, self.config.num_arms)
 
-            mu_pred, _ = self.net(flat_contexts)
-            mu_pred = torch.stack(mu_pred)
-            mu_pred = mu_pred.view(2, *contexts.shape[:2]) # here we need this to deconfound-timestep
+        if self.config.cuda:
+            deconfounded_effects = deconfounded_effects.cuda()
 
-            deconfounded_effects = torch.zeros(bs, self.config.num_arms)
+        mu_pred = mu_pred.gather(0, treatments[None]).squeeze()
 
-            if self.config.cuda:
-                deconfounded_effects = deconfounded_effects.cuda()
-
-            mu_pred = mu_pred.gather(0, treatments[None]).squeeze()
-
-            for i in range(bs):
-                deconfounded_effects[i] = effects[i] - (mu_pred[i].sum() - mu_pred[i])
+        for i in range(bs):
+            deconfounded_effects[i] = effects[i] - (mu_pred[i].sum() - mu_pred[i])
 
         return deconfounded_effects
+
+    def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
+        if self.config.cuda:
+            contexts = contexts.cuda()
+        return self.net(contexts)

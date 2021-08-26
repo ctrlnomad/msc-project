@@ -75,14 +75,14 @@ class WBVis:
 
     def collect_beliefs(self,  env,  agent, timestep):
         contexts = env.digit_contexts
-        beliefs = safenumpy(agent.estimator.compute_beliefs(contexts, return_proba=True)).squeeze()
+        beliefs = safenumpy(agent.estimator.compute_beliefs(contexts)).squeeze()
 
         self.log_dict('Causal Model', beliefs, step=timestep.id)
 
-    def collect_train_loss(self, loss ,kl ,ll, timestep):
+    def collect_train_loss(self, loss ,nll, kl , timestep):
         self.run.log({'Total Loss': loss},step=timestep.id)
         self.run.log({'KL': kl}, step=timestep.id)
-        self.run.log({'Log-Like': ll},step=timestep.id)
+        self.run.log({'Neg. Log-Like': nll},step=timestep.id)
         
     def finish(self):
         wandb.finish()

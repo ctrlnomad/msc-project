@@ -51,12 +51,6 @@ if __name__ == '__main__':
 
     with tqdm(total=config.num_ts) as pbar:
         while not timestep.done:
-
-            if config.log_every > 0 and  timestep.id % config.telemetry_every == 0:
-                vis.collect(agent, mnist_env, timestep)
-                vis.collect_arm_distributions(agent, mnist_env, timestep)
-                vis.collect_beliefs(mnist_env, agent, timestep)
-
             if config.num_ts * config.do_nothing < timestep.id:
                 op = agent.act(timestep)
             else:
@@ -66,8 +60,11 @@ if __name__ == '__main__':
 
             agent.observe(old_timestep)
             losses = agent.train()
-            vis.collect_train_loss(*losses, timestep.id)
 
+            if config.log_every > 0 and  timestep.id % config.log_every == 0 and losses:
+                vis.collect_beliefs(mnist_env, agent, timestep)
+                vis.collect_train_loss(*losses, timestep)
+   
             pbar.update(1)
 
     if config.log_every > 0: 
