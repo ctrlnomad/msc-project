@@ -79,5 +79,10 @@ class WBVis:
 
         self.log_dict('Causal Model', beliefs, step=timestep.id)
 
+    def collect_train_loss(self, loss ,kl ,ll, timestep):
+        self.run.log({'Total Loss': loss},step=timestep.id)
+        self.run.log({'KL': kl}, step=timestep.id)
+        self.run.log({'Log-Like': ll},step=timestep.id)
+        
     def finish(self):
         wandb.finish()

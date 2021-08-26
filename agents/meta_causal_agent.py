@@ -53,11 +53,10 @@ class MetaCausalAgent(BaseAgent):
 
         dataset = TimestepDataset(self.memory)
         
-        for e in range(n_epochs):
-            logger.info(f'[{e}] starting training ...')
-            self.estimator.train(dataset)
-            logger.info(f'[{e}] training finished')
-
+        logger.info(f'starting training ...')
+        loss, kl, ll = self.estimator.train(dataset, num_epochs=n_epochs)
+        logger.info(f'training finished')
+        return loss, kl, ll
         
     def act(self, timestep: Timestep):
         uncertaitnties = self.compute_digit_uncertainties(timestep.context)

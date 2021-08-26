@@ -65,7 +65,8 @@ if __name__ == '__main__':
             old_timestep, timestep = mnist_env.step(op)
 
             agent.observe(old_timestep)
-            agent.train()
+            losses = agent.train()
+            vis.collect_train_loss(*losses, timestep.id)
 
             pbar.update(1)
 

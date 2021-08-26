@@ -152,8 +152,9 @@ class StructEstimator:
         
         self.net.proc_dataset(contexts, treatments, effects)
         
-        # freeze the struct model of smt ?
-        self.effect_estimator.train(dataset)
+        # freeze the struct model?
+        self.effect_estimator = EffectEstimator(self.config, self.net)
+        self.effect_estimator.train(dataset) # a new effect estimator trained to convergence 
         
         contexts, treatments, _, effects = next(iter(DataLoader(dataset, batch_size=len(dataset), shuffle=True)))
         ll = self.effect_estimator.compute_ll(contexts, treatments, effects) # with the trained thing
@@ -172,26 +173,36 @@ class StructEstimator:
         loss.backward()
 
         self.opt.step()
+        return loss.item(), ll.item(), kl.item()
 
     @property
     def models(self):
         return [self.net, self.effect_estimator.net]
 
+    def compute_beliefs(self, contexts):
+        probas = self.net(contexts)
+        return probas
 
 
 class EffectEstimator(DropoutEstimator):
     def __init__(self, config, causal_model: torch.nn.Module) -> None:
         self.config = config
         self.net = EffectNet(config)
+
         if self.config.cuda:
             self.net = self.net.cuda()
+
         self.opt = optim.Adam(self.net.parameters())
 
         self.causal_model = causal_model
 
-    def train(self, dataset):
+    def train(self, dataset, num_epochs=2):
+        for _ in range(num_epochs):
+            self.train_once(dataset)
 
-        loader = DataLoader(dataset, batch_size=self.config.batch_size)
+    def train_once(self, dataset):
+
+        loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
 
         for contexts, treatments, _, effects in loader:
 
@@ -265,7 +276,7 @@ class EffectEstimator(DropoutEstimator):
             causal_probas = self.causal_model(flat_contexts)
 
             # causal_probas = causal_probas.view(*contexts.shape[:2])
-            dist = D.RelaxedBernoulli(1, probs=causal_probas) # should we sample or can we use directly?
+            dist = D.RelaxedBernoulli(1, probs=causal_probas) # should we sample or can we use directly? TODO
 
             causal_probas_sample = dist.rsample()
             
