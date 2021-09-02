@@ -75,11 +75,11 @@ class DropoutEstimator(BaseUncertainty):
         return self.estimator(contexts)
 
     def train(self, dataset,  num_epochs=2):
-        self.estimator.train(dataset,  num_epochs=num_epochs)
+        self.estimator.train(dataset, num_epochs=num_epochs)
 
     @property
     def models(self):
-        return self.net
+        return self.estimator.net
 
 
 class EnsembleEstimator(BaseUncertainty):
@@ -123,4 +123,4 @@ class EnsembleEstimator(BaseUncertainty):
 
     @property
     def models(self):
-        return self.ensemble
+        return [e.net for e in self.ensemble]

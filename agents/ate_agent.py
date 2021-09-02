@@ -77,6 +77,10 @@ class ATEAgent(BaseAgent):
     def act(self, timestep: Timestep):
         uncertaitnties = self.compute_digit_uncertainties(timestep.context)
         loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
+
+        if len(loc.shape) > 1:
+            loc = loc[0].squeeze()
+
         intervention = loc[1] + len(timestep.context)* loc[0]
         return intervention.item()
     
@@ -86,7 +90,8 @@ class ATEAgent(BaseAgent):
         return variances 
 
     def compute_digit_distributions(self, contexts: torch.Tensor):
-        return self.estimator(contexts)
+        mu, sigma = self.estimator(contexts)
+        return torch.stack(mu), torch.stack(sigma) 
 
     def compute_best_action(self, contexts: torch.Tensor):
         mu, _ = self.estimator(contexts)

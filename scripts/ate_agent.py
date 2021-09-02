@@ -50,7 +50,7 @@ if __name__ == '__main__':
     with tqdm(total=config.num_ts) as pbar:
         while not timestep.done:
 
-            if config.log_every > 0  and timestep.id % config.telemetry_every == 0:
+            if config.log_every > 0  and timestep.id % config.log_every == 0:
                 vis.collect(agent, mnist_env, timestep)
                 vis.collect_arm_distributions(agent, mnist_env, timestep)
 
