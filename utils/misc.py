@@ -14,4 +14,7 @@ def to_diag_var(diag:torch.Tensor,cuda=False):
 
 
 def safenumpy(tensor: torch.Tensor) -> np.ndarray:
-    return tensor.detach().cpu().numpy()
+    if isinstance(tensor,  torch.Tensor):
+        return tensor.detach().cpu().numpy()
+    else:
+        return tensor

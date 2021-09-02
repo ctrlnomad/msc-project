@@ -20,7 +20,8 @@ class WBVis:
             config=config,
             notes=str(env))
 
-        self.run.watch(agent.estimator.models, log='ALL',  log_freq=5)
+        if hasattr(agent,'estimator'):
+            self.run.watch(agent.estimator.models, log='ALL',  log_freq=5)
 
         def log_dict(tag, tensor, step):
             d = dict()
@@ -47,11 +48,11 @@ class WBVis:
             self.log_dict('NoTreatment/Uncertainty', unc[0,:], step=timestep.id)
 
 
-        regret = env.compute_regret(agent)
-        wandb.log({'General/Regret': regret}, step=timestep.id) # useless for now
+        #regret = env.compute_regret(agent)
+        #wandb.log({'General/Regret': regret}, step=timestep.id) # useless for now
 
         # errors
-        ite_pred = agent.estimator(env.digit_contexts)[0]
+        ite_pred, _ = agent.compute_digit_distributions(env.digit_contexts)
         env_ite = env.ite.cuda() if self.config.cuda else env.ite 
         errors = env_ite - ite_pred
 
@@ -65,13 +66,15 @@ class WBVis:
 
     def collect_arm_distributions(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         means, variances = agent.compute_digit_distributions(env.digit_contexts)
-        means = safenumpy(means)
-        variances = safenumpy(variances)
+        if means is not None: 
+            means = safenumpy(means)
+            self.log_dict('Treatment/Means', means[1, :],step=timestep.id)
+            self.log_dict('NoTreatment/Means', means[0, :],step=timestep.id)
 
-        self.log_dict('Treatment/Means', means[1, :],step=timestep.id)
-        self.log_dict('NoTreatment/Means', means[0, :],step=timestep.id)
-        self.log_dict('Treatment/Variances', variances[1, :],step=timestep.id)
-        self.log_dict('NoTreatment/Variances', variances[0, :],step=timestep.id)
+        if variances is not None:
+            variances = safenumpy(variances)
+            self.log_dict('Treatment/Variances', variances[1, :],step=timestep.id)
+            self.log_dict('NoTreatment/Variances', variances[0, :],step=timestep.id)
 
     def collect_beliefs(self,  env,  agent, timestep):
         contexts = env.digit_contexts

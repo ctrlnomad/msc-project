@@ -1,23 +1,20 @@
-from typing import Tuple, List
-from dataclasses import dataclass, field
+from agents.effect.uncertainty import BaseUncertainty
+from typing import Tuple
+from dataclasses import dataclass
 import numpy as np
 
 from collections import deque
-from functools import partial
 
 import torch
 import torch.nn as nn
 from torch.nn.modules import utils
-import torch.optim as optim
 
 from torch.utils.data import DataLoader
-import torch.distributions as distributions
 
 from causal_env.envs import Timestep, TimestepDataset
 from agents.base_agent import BaseAgent
 
-import agents.uncertainty_estimators.arches as arches
-import agents.uncertainty_estimators.estimators as estimators
+from agents.effect import EnsembleEstimator, DropoutEstimator
 
 import utils
 import utils.mnist 
@@ -27,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ATEAgentConfig:
-    Arch: nn.Module = None
-    Estimator: estimators.BaseEstimator = None
+    estimator: BaseUncertainty = None
 
     dim_in: Tuple[int] = (1, 28, 28)
     memsize: int = 100_000
@@ -36,7 +32,7 @@ class ATEAgentConfig:
     ensemble_size: int = 10
     dropout_rate: float = 0.5
 
-    do_nothing: float = 0.5 # do nothing for this proportion of steps
+    do_nothing: float = 0.5
     cuda: bool = False
     fixed_sigma: bool = False
     batch_size:int = 32
@@ -52,7 +48,7 @@ class ATEAgent(BaseAgent):
         # learning is the ITE of causal arms
         self.memory = deque(maxlen=config.memsize)
 
-        self.estimator = config.Estimator(config.Arch, config)
+        self.estimator = config.Estimator(config, causal_model=lambda x: x)
         self.config = config
 
         self.digit_sampler = utils.mnist.MnistSampler()

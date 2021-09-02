@@ -47,7 +47,11 @@ class UCBSocket(PowerSocket):
         self.confidence_level = kwargs.pop('confidence_level', 2.0)       
                 
         # pass the true reward value to the base PowerSocket   
-        super().__init__()           
+        super().__init__()         
+    
+    @property
+    def mu(self):
+        return self.Q  
         
     def uncertainty(self, t): 
         """ calculate the uncertainty in the estimate of this socket's mean """
@@ -123,10 +127,18 @@ class BaselineAgent(BaseAgent):
             return None
 
     def compute_digit_distributions(self, contexts: torch.Tensor):
-        if hasattr(self.sockets[0], 'mu') and hasattr(self.sockets[0], 'sigma'):
-            return torch.Tensor([s.mu for s in self.sockets]),  torch.Tensor([s.sigma for s in self.sockets])
-        else:
-            return None, None
+        mu = sigma =  None
+        if hasattr(self.sockets[0], 'mu'):
+            mu = torch.Tensor([s.mu for s in self.sockets]).view(2, len(self.sockets)//2)
+
+        if  hasattr(self.sockets[0], 'sigma'):
+            sigma = torch.Tensor([s.sigma for s in self.sockets]).view(2, len(self.sockets)//2)
+
+
+        return mu, sigma
             
     def compute_best_action(self, contexts: torch.Tensor):
-        return random_argmax([s.Q for  s in self.sockets])
+        Qs = np.array([s.Q for  s in self.sockets]).reshape(2, len(self.sockets)//2)
+        best_action = random_argmax(Qs)
+        print(best_action)
+        return best_action

@@ -5,7 +5,7 @@ import numpy as np
 from dataclasses import dataclass
 
 import torch 
-import torch.distributions as distributions
+import torch.distributions as D
 from typing import Any, List
 
 from causal_env.envs.timestep import Timestep
@@ -40,7 +40,6 @@ class CausalMnistBanditsEnv(gym.Env):
         self.observation_space = spaces.Box(0, 122, (self.config.num_arms, 28, 28) ) # what about the other arms observation
 
         self.default_probs = torch.rand(self.config.num_arms)
-        self.default_dist = distributions.Bernoulli(probs=self.default_probs)
     
         self.causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
         
@@ -90,13 +89,15 @@ class CausalMnistBanditsEnv(gym.Env):
     def _make_timestep(self, tsid) -> Any:
         ts = Timestep()
         ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
-
+        # self.default_dist.sample().long()
         ts.causal_ids = np.in1d(ts.info, self.causal_ids.cpu().numpy())
         #ts.causal_ids = torch.LongTensor(np.where(ts_causal_ids)[0])
 
         ts.context = torch.stack([self.digit_sampler.sample(n) for n in ts.info])
         ts.info = torch.LongTensor(ts.info)
-        ts.treatments = self.default_dist.sample().long()
+
+        ts_treatment_probs = self.default_probs.index_select(0, ts.info)
+        ts.treatments = D.Bernoulli(probs=ts_treatment_probs).sample().long()
         ts.done = tsid >= self.config.num_ts
         ts.id = tsid
         return ts
@@ -124,7 +125,7 @@ class CausalMnistBanditsEnv(gym.Env):
 
         diag_vars = utils.to_diag_var(reward_variances)
 
-        reward = distributions.MultivariateNormal(reward_mean, diag_vars).sample().sum()
+        reward = D.MultivariateNormal(reward_mean, diag_vars).sample().sum()
 
         # generate new tiemstep
         old_timestep = self.current_timestep
@@ -144,10 +145,10 @@ class CausalMnistBanditsEnv(gym.Env):
         mu_true = self.ite.ravel()
         sigma_true = utils.to_diag_var(self.variance.ravel())
         
-        pred_dist = distributions.MultivariateNormal(mu_pred, sigma_pred)
-        true_dist = distributions.MultivariateNormal(mu_true, sigma_true)
+        pred_dist = D.MultivariateNormal(mu_pred, sigma_pred)
+        true_dist = D.MultivariateNormal(mu_true, sigma_true)
 
-        kl = distributions.kl_divergence(true_dist, pred_dist)
+        kl = D.kl_divergence(true_dist, pred_dist)
         return kl.mean().item()
 
     def compute_regret(self, agent):

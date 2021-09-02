@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Tuple, List, Any
 from dataclasses import dataclass
 import numpy as np
 from collections import deque
@@ -9,7 +9,7 @@ import torch.nn as nn
 from causal_env.envs import Timestep, TimestepDataset
 from agents.base_agent import BaseAgent
 
-import  agents.uncertainty_estimators.estimators as estimators
+import  agents.effect.estimators as estimators
 
 import logging
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MetaCausalAgentConfig:
     Arch: nn.Module = None
-    Estimator: estimators.BaseEstimator = None
+    Estimator: Any = None
 
     dim_in: Tuple[int] = (1, 28, 28)
     memsize: int = 100_000
