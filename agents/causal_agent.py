@@ -1,4 +1,4 @@
-from typing import Tuple, List, Any
+from typing import Tuple, Callable, Any
 from dataclasses import dataclass, field
 import numpy as np
 from collections import deque
@@ -50,7 +50,7 @@ class CausalAgent(BaseAgent):
 
         self.memory = deque(maxlen=config.memsize)
 
-        self.estimator = config.Estimator(config, causal_model=config.causal_model)
+        self.estimator = config.Estimator(config)
         
 
     def observe(self, timestep: Timestep):
@@ -62,11 +62,10 @@ class CausalAgent(BaseAgent):
             return 
 
         dataset = TimestepDataset(self.memory) # deconfound
-        loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
 
         for e in range(n_epochs):
             logger.info(f'[{e}] starting training ...')
-            losses = self.estimator.train(loader)
+            losses = self.estimator.train(dataset)
             logger.info(f'[{e}] training finished') # TODO print losss
         
     def act(self, timestep: Timestep):
@@ -94,40 +93,6 @@ class CausalAgent(BaseAgent):
     def make_decounfound(self):
 
         def deconfound(contexts, treatments,  ts_causal_ids, effects):
-            with torch.no_grad():
-                bs = len(contexts)
-
-                causal_idxs = torch.nonzero(ts_causal_ids, as_tuple=False)
-                causal_treatments = torch.masked_select(treatments, ts_causal_ids.bool())
-
-                if causal_idxs.nelement() == 0:
-                    effects = torch.zeros(bs, self.config.num_arms)
-                    return effects.cuda() if self.config.cuda else effects
-
-                confounding_contexts = torch.stack([contexts[bidx, sidx] for bidx, sidx in causal_idxs])
-                mu_pred, _ = self.estimator(confounding_contexts)
-
-                deconfounded_effects  = torch.zeros(bs, self.config.num_arms)
-
-                if self.config.cuda:
-                    deconfounded_effects = deconfounded_effects.cuda()
-
-                if len(mu_pred.shape) != len(causal_treatments[None].shape):
-                    mu_pred = mu_pred.unsqueeze(1)
-
-                mu_pred = mu_pred.gather(0, causal_treatments[None]).squeeze()
-  
-                for i in range(bs):
-                    total_batch_effect = torch.masked_select(mu_pred ,causal_idxs[:, 0] == i)
-                    deconfounded_effects[i, ts_causal_ids[i]] = effects[i] - (total_batch_effect.sum() - total_batch_effect)
-
-                return deconfounded_effects
-
-        return deconfound
-
-    def make_decounfound_no_causal(self):
-
-        def deconfound(contexts, treatments,  _, effects):
             with torch.no_grad():
                 bs = len(contexts)
 

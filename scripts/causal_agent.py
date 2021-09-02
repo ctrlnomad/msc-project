@@ -4,18 +4,19 @@ torch.autograd.set_detect_anomaly(True)
 import warnings
 warnings.filterwarnings("ignore", message=r"Passing", category=FutureWarning)
 
-import gym
-import numpy as np
+from argparse_dataclass import ArgumentParser
+from tqdm import tqdm
+import logging
+
 from dataclasses import dataclass
 
 from causal_env.envs import CausalMnistBanditsConfig, CausalMnistBanditsEnv
+
 from agents import CausalAgent, CausalAgentConfig
-from argparse_dataclass import ArgumentParser
+from agents.effect.uncertainty import DropoutEstimator
 
 from utils.wb_vis import WBVis
 
-from tqdm import tqdm
-import logging
 
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
                      datefmt='%m/%d %I:%M:%S %p',  
@@ -27,27 +28,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Options(CausalMnistBanditsConfig, CausalAgentConfig):
   seed: int = 5000
-  debug: bool = False
-
-  log_file: str = None
-
-  telemetry_dir: str = None
-  telemetry_every: int = 1 
-
-
-import agents.uncertainty_estimators.estimators as estimators
-import agents.uncertainty_estimators.arches as arches
-
+  log_every: int = -1
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(Options)
     config = parser.parse_args()
 
-    config.Arch = arches.ConvNet
-    config.Estimator = estimators.DropoutEstimator
-
-    logger.warning(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
+    config.Estimator = DropoutEstimator
 
     mnist_env = CausalMnistBanditsEnv()
     mnist_env.init(config)
@@ -55,16 +43,15 @@ if __name__ == '__main__':
     logger.warning(config)
     logger.warning(mnist_env)
 
-    config.causal_ids = mnist_env.causal_ids
     agent = CausalAgent(config)
     
-    vis = WBVis(config, agent, mnist_env)
+    vis = WBVis(config, agent, mnist_env) if config.log_every > 0 else None
     timestep = mnist_env.reset()
 
     with tqdm(total=config.num_ts) as pbar:
         while not timestep.done:
 
-            if timestep.id % config.telemetry_every == 0:
+            if config.log_every > 0 and timestep.id % config.telemetry_every == 0:
                 vis.collect(agent, mnist_env, timestep)
                 vis.collect_arm_distributions(agent, mnist_env, timestep)
 
@@ -80,5 +67,5 @@ if __name__ == '__main__':
 
             pbar.update(1)
 
-    vis.finish()
+    if config.log_every > 0: vis.finish()
 

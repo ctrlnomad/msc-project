@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ATEAgentConfig:
+    causal_model = None
     estimator: BaseUncertainty = None
 
     dim_in: Tuple[int] = (1, 28, 28)
@@ -46,10 +47,11 @@ class ATEAgent(BaseAgent):
     """
     def __init__(self, config: ATEAgentConfig): # not quite variational agent config
         # learning is the ITE of causal arms
+        self.config = config
+        
         self.memory = deque(maxlen=config.memsize)
 
-        self.estimator = config.Estimator(config, causal_model=None)
-        self.config = config
+        self.estimator = config.Estimator(config)
 
         self.digit_sampler = utils.mnist.MnistSampler()
         
@@ -66,12 +68,10 @@ class ATEAgent(BaseAgent):
 
         if self.config.batch_size < 0:
             self.config.batch_size = len(dataset)
-            
-        loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True)
 
         for e in range(n_epochs):
             logger.info(f'[{e}] starting training ...')
-            losses = self.estimator.train(loader)
+            losses = self.estimator.train(dataset)
             logger.info(f'[{e}] training finished') # TODO  print losss
         
     def act(self, timestep: Timestep):

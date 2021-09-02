@@ -34,8 +34,8 @@ class BaseUncertainty:
 
 
 class DropoutEstimator(BaseUncertainty):
-    def __init__(self, make: Callable, config, deconfound_fn: Callable = None, CATE=False) -> None:
-        self.make, self.config, self.deconfound_fn = make, config, deconfound_fn
+    def __init__(self, config) -> None:
+        self.config = config
         self.estimator = EffectEstimator(self.config) 
 
 
@@ -84,6 +84,7 @@ class DropoutEstimator(BaseUncertainty):
 
 class EnsembleEstimator(BaseUncertainty):
     def __init__(self, config) -> None: 
+        self.config = config
         self.ensemble = [EffectEstimator(config) for _ in range(self.config.ensemble_size)]
 
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:

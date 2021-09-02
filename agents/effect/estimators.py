@@ -86,7 +86,7 @@ class StructEstimator:
 
 
 class EffectEstimator:
-    def __init__(self, config, causal_model: torch.nn.Module) -> None:
+    def __init__(self, config) -> None:
         self.config = config
         self.net = EffectNet(config)
 
@@ -95,7 +95,7 @@ class EffectEstimator:
 
         self.opt = optim.Adam(self.net.parameters())
 
-        self.causal_model = causal_model
+        self.causal_model = config.causal_model
 
     def train(self, dataset, num_epochs=2):
         for _ in range(num_epochs):
@@ -114,8 +114,8 @@ class EffectEstimator:
             if self.causal_model:
                 effects = self.deconfound(contexts, treatments, effects, true_causal)
             else:
-                effects = torch.repeat_interleave(effects, self.config.num_arms, 1)
-
+                effects = torch.repeat_interleave(effects, self.config.num_arms)
+            
             effects = effects.flatten()
             contexts = contexts.view(-1, *self.config.dim_in)
             treatments = treatments.flatten()
@@ -174,14 +174,14 @@ class EffectEstimator:
 
     def deconfound(self,  contexts, treatments, effects, true_causal):
         # now the idea is different, contexts are scaled to the degree of their causality
-        # freeze(effect_net)
         bs = len(contexts)
         
         contexts = contexts.clone().detach()
         flat_contexts = contexts.view(-1, *self.config.dim_in)
         
-        causal_ids = self.causal_model(true_causal)
-        causal_ids = causal_ids.unsqueeze(-1).repeat([1, 1, 28, 28])
+        causal_ids = self.causal_model(true_causal).long()
+        causal_ids = causal_ids.flatten().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        causal_ids = causal_ids.repeat(1, *self.config.dim_in)
 
         flat_contexts = flat_contexts * causal_ids
 
@@ -206,7 +206,9 @@ class EffectEstimator:
     def __call__(self, contexts: torch.Tensor) -> torch.Tensor:
         if self.config.cuda:
             contexts = contexts.cuda()
+
         self.net.eval()
         effects = self.net(contexts)
         self.net.train()
+
         return effects

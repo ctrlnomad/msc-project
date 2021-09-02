@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MetaCausalAgentConfig:
-    Arch: nn.Module = None
     Estimator: Any = None
 
     dim_in: Tuple[int] = (1, 28, 28)
@@ -31,7 +30,6 @@ class MetaCausalAgentConfig:
     batch_size:int = 32
 
     fixed_sigma: bool = False
-    causal_ids: List[int] = None
 
     prior: float = 1e-4
     
