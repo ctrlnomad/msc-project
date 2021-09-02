@@ -56,7 +56,7 @@ if __name__ == '__main__':
     logger.warning(mnist_env)
 
     agent = ATEAgent(config)
-    vis = WBVis(config)
+    vis = WBVis(config, agent, mnist_env)
 
     timestep = mnist_env.reset()
 
@@ -73,7 +73,7 @@ if __name__ == '__main__':
                 op = mnist_env.noop
 
             old_timestep, timestep = mnist_env.step(op)
-
+            vis.run.log({'Reward': old_timestep.reward.item()})
             agent.observe(old_timestep)
             agent.train()
 

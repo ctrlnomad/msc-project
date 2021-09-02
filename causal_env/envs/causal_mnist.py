@@ -25,7 +25,7 @@ class CausalMnistBanditsConfig:
     num_ts: int = 100_000
 
     scale_divider: int = 1
-    loc_multiplier: int = 1
+    loc_multiplier: int = 50
 
 class CausalMnistBanditsEnv(gym.Env):
     def init(self, config: CausalMnistBanditsConfig) -> None:

@@ -20,7 +20,7 @@ class WBVis:
             config=config,
             notes=str(env))
 
-        self.run.watch(agent.estimator.models, log='ALL',  log_freq=1)
+        #self.run.watch(agent.estimator.models, log='ALL',  log_freq=1)
 
         def log_dict(tag, tensor, step):
             d = dict()
