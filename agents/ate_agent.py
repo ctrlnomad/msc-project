@@ -48,7 +48,7 @@ class ATEAgent(BaseAgent):
         # learning is the ITE of causal arms
         self.memory = deque(maxlen=config.memsize)
 
-        self.estimator = config.Estimator(config, causal_model=lambda x: x)
+        self.estimator = config.Estimator(config, causal_model=None)
         self.config = config
 
         self.digit_sampler = utils.mnist.MnistSampler()

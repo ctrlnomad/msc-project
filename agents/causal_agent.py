@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CausalAgentConfig:
-    Arch: nn.Module = None
+    causal_model: Callable = lambda x: x # true causal model
     Estimator: Any = None
 
     dim_in: Tuple[int] = (1, 28, 28)
@@ -36,7 +36,7 @@ class CausalAgentConfig:
     batch_size:int = 32
 
     fixed_sigma: bool = False
-    causal_ids: List[int] = None
+
     
 class CausalAgent(BaseAgent):
     """
@@ -46,12 +46,11 @@ class CausalAgent(BaseAgent):
     """
     def __init__(self, config: CausalAgentConfig): # not quite variational agent config
         # learning is the ITE of causal arms
-        assert config.causal_ids is not None
         self.config = config
 
         self.memory = deque(maxlen=config.memsize)
 
-        self.estimator = config.Estimator(config.Arch, config, self.make_decounfound())
+        self.estimator = config.Estimator(config, causal_model=config.causal_model)
         
 
     def observe(self, timestep: Timestep):
