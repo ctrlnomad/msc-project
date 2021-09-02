@@ -37,9 +37,6 @@ class WBVis:
         unc = agent.compute_digit_uncertainties(env.digit_contexts)    
         # beliefs
 
-        # losses 
-
-
         if unc is not None:
             unc = safenumpy(unc)
             # transforming tensor to dict

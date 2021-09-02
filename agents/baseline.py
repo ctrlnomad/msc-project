@@ -140,5 +140,4 @@ class BaselineAgent(BaseAgent):
     def compute_best_action(self, contexts: torch.Tensor):
         Qs = np.array([s.Q for  s in self.sockets]).reshape(2, len(self.sockets)//2)
         best_action = random_argmax(Qs)
-        print(best_action)
         return best_action
