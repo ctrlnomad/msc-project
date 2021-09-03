@@ -41,7 +41,8 @@ class ATEAgentConfig:
     fixed_sigma: bool = False
     batch_size:int = 32
 
-
+    sigmoid_sigma: bool = False
+    fixed_sigma: bool = False
 class ATEAgent(BaseAgent):
     """
     half the round we learn by empty interventions

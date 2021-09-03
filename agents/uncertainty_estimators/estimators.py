@@ -97,6 +97,7 @@ class EnsembleEstimator(BaseEstimator):
 
         if self.config.cuda:
             self.ensemble = [n.cuda() for n in self.ensemble]
+            
         self.train_fn = cate_train_loop if CATE else train_loop
         self.opt_cls = optim.Adam
         self.opts = [self.opt_cls(n.parameters()) for n in self.ensemble]

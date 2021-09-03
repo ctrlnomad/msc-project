@@ -8,6 +8,8 @@ import torch
 import torch.distributions as distributions
 from typing import Any, List
 
+from torch.utils.data.dataset import TensorDataset
+
 from causal_env.envs.timestep import Timestep
 
 
@@ -26,6 +28,8 @@ class CausalMnistBanditsConfig:
 
     scale_divider: int = 1
     loc_multiplier: int = 50
+
+    fixed_scenario: bool = False
 
 class CausalMnistBanditsEnv(gym.Env):
     def init(self, config: CausalMnistBanditsConfig) -> None:
@@ -50,6 +54,10 @@ class CausalMnistBanditsEnv(gym.Env):
         self.ite = torch.zeros((2, config.num_arms))
         self.ite[:, self.causal_ids] = (torch.rand((2, self.config.causal_arms))*2-1) * self.config.loc_multiplier
         
+        if self.config.fixed_scenario:
+            self.causal_ids =  np.array([0])
+            self.ite = torch.FloatTensor([[-30, 0], [50, 0]])
+
         self.variance = torch.rand((2, self.config.num_arms)) / self.config.scale_divider
         self.causal_ids = torch.LongTensor(self.causal_ids)
 
@@ -89,14 +97,14 @@ class CausalMnistBanditsEnv(gym.Env):
 
     def _make_timestep(self, tsid) -> Any:
         ts = Timestep()
-        ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms)
+        ts.info = np.random.choice(np.arange(self.config.num_arms), size=self.config.num_arms, replace=False) # shuffling basically
 
         ts.causal_ids = np.in1d(ts.info, self.causal_ids.cpu().numpy())
-        #ts.causal_ids = torch.LongTensor(np.where(ts_causal_ids)[0])
 
         ts.context = torch.stack([self.digit_sampler.sample(n) for n in ts.info])
         ts.info = torch.LongTensor(ts.info)
-        ts.treatments = self.default_dist.sample().long()
+        sampled_treatments  = self.default_dist.sample().long()
+        ts.treatments = torch.index_select(sampled_treatments, 0, ts.info)
         ts.done = tsid >= self.config.num_ts
         ts.id = tsid
         return ts

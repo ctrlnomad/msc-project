@@ -37,6 +37,7 @@ class CausalAgentConfig:
     batch_size:int = 32
 
     fixed_sigma: bool = False
+    sigmoid_sigma: bool = False
     causal_ids: List[int] = None
     
 class CausalAgent(BaseAgent):

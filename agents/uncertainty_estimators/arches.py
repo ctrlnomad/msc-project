@@ -13,20 +13,29 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 class EffectNet(nn.Module):
-    def __init__(self, inp: int, dropout_rate=1/2):
+    def __init__(self, config, inp: int):
         super().__init__()
-        self.dropout_rate = dropout_rate
+        self.config = config
         self.emb = nn.Sequential(
             nn.Linear(inp, 25),
             nn.ELU(),
-            nn.Dropout(p=self.dropout_rate))
+            nn.Dropout(p=self.config.dropout_rate))
             
         self.mu = nn.Linear(25, 1)
         self.sigma = nn.Linear(25, 1)
 
     def forward(self, x):
         emb = self.emb(x)
-        return self.mu(emb),  F.relu(self.sigma(emb))
+        mu, sigma = self.mu(emb), self.sigma(emb)
+
+        if self.config.sigmoid_sigma:
+            sigma = 1e-7 + torch.sigmoid(sigma)
+        elif self.config.fixed_sigma:
+            sigma = torch.ones_like(sigma) * 0.1
+        else:
+            sigma = 1e-7 + torch.relu(self.sigma(emb))
+
+        return mu, sigma 
 
 class ConvNet(nn.Module):
 
@@ -43,18 +52,15 @@ class ConvNet(nn.Module):
             nn.Flatten()
         )
         
-        self.treat = EffectNet(320, dropout_rate=self.dropout_rate)
-        self.no_treat = EffectNet(320, dropout_rate=self.dropout_rate)
+        self.treat = EffectNet(config, 320)
+        self.no_treat = EffectNet(config, 320)
 
-    def forward(self, x, add_delta=True):
+    def forward(self, x):
         emb = self.conv_block(x)
 
         treat_mu, treat_sigma = self.treat(emb)
         no_treat_mu, no_treat_sigma = self.no_treat(emb)
 
-        if add_delta:
-            treat_sigma += 1e-7
-            no_treat_sigma += 1e-7
 
         return (no_treat_mu, treat_mu), (no_treat_sigma, treat_sigma )
 
@@ -116,7 +122,7 @@ def train_loop(model:nn.Module, loader: DataLoader, opt: optim.Optimizer, \
         contexts = contexts.view(-1, *config.dim_in)
         treatments = treatments.flatten()
 
-        mu_pred, sigma_pred = model(contexts, add_delta=True)
+        mu_pred, sigma_pred = model(contexts)
 
         mu_pred = torch.stack(mu_pred).squeeze()
         sigma_pred = torch.stack(sigma_pred).squeeze()
