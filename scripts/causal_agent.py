@@ -32,7 +32,9 @@ class Options(CausalMnistBanditsConfig, CausalAgentConfig):
   log_file: str = None
 
   telemetry_dir: str = None
-  telemetry_every: int = 1 
+  telemetry_every: int = 1
+
+  random_explore: bool = False
 
 
 import agents.uncertainty_estimators.estimators as estimators
@@ -68,10 +70,13 @@ if __name__ == '__main__':
                 vis.collect(agent, mnist_env, timestep)
                 vis.collect_arm_distributions(agent, mnist_env, timestep)
 
+            op = mnist_env.noop
             if config.num_ts * config.do_nothing < timestep.id:
-                op = agent.act(timestep)
-            else:
-                op = mnist_env.noop
+                if config.random_explore:
+                    while op == mnist_env.noop:
+                        op = mnist_env.action_space.sample()
+                else:
+                    op = agent.act(timestep)
 
             old_timestep, timestep = mnist_env.step(op)
 

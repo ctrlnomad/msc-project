@@ -31,7 +31,7 @@ class EffectNet(nn.Module):
         if self.config.sigmoid_sigma:
             sigma = 1e-7 + torch.sigmoid(sigma)
         elif self.config.fixed_sigma:
-            sigma = torch.ones_like(sigma) * 0.1
+            sigma = torch.ones_like(sigma) * 1e-3
         else:
             sigma = 1e-7 + torch.relu(self.sigma(emb))
 
