@@ -32,7 +32,7 @@ class CausalAgentConfig:
     ensemble_size: int = 10
     dropout_rate: float = 0.5
 
-    do_nothing: float = 0.5 # do nothing for this proportion of steps
+    do_nothing: float = 1 # do nothing for this proportion of steps; exploration is off for the report findings
     cuda: bool = False
     batch_size:int = 32
 
