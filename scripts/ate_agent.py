@@ -1,3 +1,6 @@
+import sys, pathlib
+sys.path.append(str(pathlib.Path(__file__).parent.parent.absolute()))
+
 import torch
 torch.autograd.set_detect_anomaly(True)
 

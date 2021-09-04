@@ -5,3 +5,9 @@ argparse_dataclass
 gym
 tensorboard
 tqdm
+dataclasses
+seaborn
+pandas
+scipy
+matplotlib
+genericpath
