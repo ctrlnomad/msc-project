@@ -1,8 +1,4 @@
-from datetime import time
 import torch
-
-import numpy as np
-from scipy.stats import norm
 
 from causal_env.envs import CausalMnistBanditsEnv
 from causal_env.envs import Timestep
@@ -11,6 +7,7 @@ from agents.base_agent import BaseAgent
 import wandb
 
 from utils.misc import safenumpy
+
 class WBVis:
     def __init__(self, config, agent, env) -> None:
         self.config = config
@@ -61,11 +58,13 @@ class WBVis:
 
     def collect_arm_distributions(self, agent: BaseAgent, env: CausalMnistBanditsEnv, timestep: Timestep):
         means, variances = agent.compute_digit_distributions(env.digit_contexts)
+
         means = safenumpy(means)
         variances = safenumpy(variances)
 
         self.log_dict('Treatment/Means', means[1, :],step=timestep.id)
         self.log_dict('NoTreatment/Means', means[0, :],step=timestep.id)
+
         self.log_dict('Treatment/Variances', variances[1, :],step=timestep.id)
         self.log_dict('NoTreatment/Variances', variances[0, :],step=timestep.id)
 

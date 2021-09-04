@@ -4,3 +4,4 @@ numpy
 argparse_dataclass
 gym
 tqdm
+scipy
