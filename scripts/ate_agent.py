@@ -1,5 +1,6 @@
-import sys, pathlib
+import sys, pathlib, os
 sys.path.append(str(pathlib.Path(__file__).parent.parent.absolute()))
+
 
 import torch
 torch.autograd.set_detect_anomaly(True)
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Options(CausalMnistBanditsConfig, ATEAgentConfig):
   seed: int = 5000
-
+  api_key:str = ''
   log_every: int = 1
 
   random_explore: bool = False

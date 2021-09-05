@@ -12,6 +12,9 @@ class WBVis:
     def __init__(self, config, agent, env) -> None:
         self.config = config
 
+        if config.api_key:
+            wandb.login(key=config.api_key)
+
         self.run = wandb.init(project='causal-bandits', 
                                 entity='ctrlnomad', 
                                 config=config,

@@ -1,0 +1,4 @@
+compute:
+    environment:
+      WANDB_API_KEY: "8aafff01aa5bc447e24a5e0eebd3ae02c7243269"
+
