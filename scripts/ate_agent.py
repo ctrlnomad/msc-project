@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from causal_env.envs import CausalMnistBanditsConfig
 from agents import ATEAgent, ATEAgentConfig
-from argparse_dataclass import ArgumentParser
+from simple_parsing import ArgumentParser
 
 from utils.wb_vis import WBVis
 
@@ -34,7 +34,7 @@ class Options(CausalMnistBanditsConfig, ATEAgentConfig):
   log_every: int = 1
 
   random_explore: bool = False
-  group: Any = None
+  group: str = ''
 
 
 import agents.uncertainty_estimators.estimators as estimators
@@ -43,8 +43,9 @@ import agents.uncertainty_estimators.arches as arches
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(Options)
-    config = parser.parse_args()
+    parser = ArgumentParser()
+    parser.add_arguments(Options, dest='options')
+    config = parser.parse_args().options
 
     config.Arch = arches.ConvNet
     config.Estimator = estimators.DropoutEstimator
@@ -65,19 +66,19 @@ if __name__ == '__main__':
     with tqdm(total=config.num_ts) as pbar:
         while not timestep.done:
 
-            if config.log_every > 0 and timestep.id % config.telemetry_every == 0:
-                vis.collect(agent, mnist_env, timestep)
-                vis.collect_arm_distributions(agent, mnist_env, timestep)
-
             if config.num_ts * config.do_nothing < timestep.id:
                 op = agent.act(timestep)
             else:
                 op = mnist_env.noop
 
             old_timestep, timestep = mnist_env.step(op)
-            vis.run.log({'Reward': old_timestep.reward.item()})
             agent.observe(old_timestep)
             agent.train()
+
+            if config.log_every > 0 and timestep.id % config.log_every == 0:
+                vis.collect(agent, mnist_env, timestep)
+                vis.collect_arm_distributions(agent, mnist_env, timestep)
+                vis.run.log({'Reward': old_timestep.reward.item()})
 
             pbar.update(1)
 

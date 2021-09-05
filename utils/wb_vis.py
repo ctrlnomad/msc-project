@@ -16,7 +16,7 @@ class WBVis:
                                 entity='ctrlnomad', 
                                 config=config,
                                 notes=str(env),
-                                group = config.group)
+                                group = config.group if  config.group else None)
 
         #self.run.watch(agent.estimator.models, log='ALL',  log_freq=1)
 
