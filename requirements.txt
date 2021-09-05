@@ -1,8 +1,8 @@
-torch==1.9.0
-torchvision
-numpy==1.21.1
+torch==1.8.1
+torchvision==0.8.1
+numpy==1.17.4
 argparse_dataclass
 gym
 tqdm
-scipy
+scipy==1.5.4
 simple_parsing
