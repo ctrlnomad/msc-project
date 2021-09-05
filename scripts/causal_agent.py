@@ -9,7 +9,6 @@ import warnings
 warnings.filterwarnings("ignore", message=r"Passing", category=FutureWarning)
 
 from typing import Any
-
 from dataclasses import dataclass
 
 from causal_env.envs import CausalMnistBanditsConfig, CausalMnistBanditsEnv
@@ -32,12 +31,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Options(CausalMnistBanditsConfig, CausalAgentConfig):
   seed: int = 5000
-
+  api_key:str = ''
   log_every: int = 1
 
   random_explore: bool = False
-  group: Any = None
-
+  group: str = ''
 
 import agents.uncertainty_estimators.estimators as estimators
 import agents.uncertainty_estimators.arches as arches
@@ -69,7 +67,7 @@ if __name__ == '__main__':
     with tqdm(total=config.num_ts) as pbar:
         while not timestep.done:
 
-            if config.log_every > 0 and timestep.id % config.telemetry_every == 0:
+            if config.log_every > 0 and timestep.id % config.log_every == 0:
                 vis.collect(agent, mnist_env, timestep)
                 vis.collect_arm_distributions(agent, mnist_env, timestep)
 
@@ -88,6 +86,5 @@ if __name__ == '__main__':
 
             pbar.update(1)
 
-    if config.log_every > 0:
-        vis.finish()
+    if config.log_every > 0: vis.finish()
 
