@@ -7,3 +7,4 @@ gym-bandits/
 explogs/
 runs/
 wandb/
+*_plots/

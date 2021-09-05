@@ -23,8 +23,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CausalAgentConfig:
-    Arch: nn.Module = None
-    Estimator: estimators.BaseEstimator = None
 
     dim_in: Tuple[int] = (1, 28, 28)
     memsize: int = 100_000
@@ -38,7 +36,6 @@ class CausalAgentConfig:
 
     fixed_sigma: bool = False
     sigmoid_sigma: bool = False
-    causal_ids: List[int] = None
     
 class CausalAgent(BaseAgent):
     """

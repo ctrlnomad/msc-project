@@ -8,7 +8,7 @@ import warnings
 warnings.filterwarnings("ignore", message=r"Passing", category=FutureWarning)
 
 import gym
-import numpy as np
+from typing import Any
 from dataclasses import dataclass
 
 from causal_env.envs import CausalMnistBanditsConfig
@@ -30,12 +30,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Options(CausalMnistBanditsConfig, ATEAgentConfig):
   seed: int = 5000
-  debug: bool = False
 
-  log_file: str = None
+  log_every: int = 1
 
-  telemetry_dir: str = None
-  telemetry_every: int = 1 
+  random_explore: bool = False
+  group: Any = None
 
 
 import agents.uncertainty_estimators.estimators as estimators
@@ -59,14 +58,14 @@ if __name__ == '__main__':
     logger.warning(mnist_env)
 
     agent = ATEAgent(config)
-    vis = WBVis(config, agent, mnist_env)
+    vis = WBVis(config, agent, mnist_env)  if config.log_every > 0 else None
 
     timestep = mnist_env.reset()
 
     with tqdm(total=config.num_ts) as pbar:
         while not timestep.done:
 
-            if timestep.id % config.telemetry_every == 0:
+            if config.log_every > 0 and timestep.id % config.telemetry_every == 0:
                 vis.collect(agent, mnist_env, timestep)
                 vis.collect_arm_distributions(agent, mnist_env, timestep)
 
@@ -82,7 +81,7 @@ if __name__ == '__main__':
 
             pbar.update(1)
 
-    vis.finish()
+    if config.log_every > 0 : vis.finish()
 
     
 

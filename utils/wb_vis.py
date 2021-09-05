@@ -13,9 +13,10 @@ class WBVis:
         self.config = config
 
         self.run = wandb.init(project='causal-bandits', 
-            entity='ctrlnomad', 
-            config=config,
-            notes=str(env))
+                                entity='ctrlnomad', 
+                                config=config,
+                                notes=str(env),
+                                group = config.group)
 
         #self.run.watch(agent.estimator.models, log='ALL',  log_freq=1)
 

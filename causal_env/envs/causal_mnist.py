@@ -68,6 +68,7 @@ class CausalMnistBanditsEnv(gym.Env):
 
         if self.config.pretend_all_causal:
             self.causal_ids = np.arange(config.num_arms)
+            
         self.causal_ids = torch.LongTensor(self.causal_ids)
 
         if self.config.cuda:
