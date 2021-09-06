@@ -59,16 +59,21 @@ class CausalMnistBanditsEnv(gym.Env):
 
         self.ite = torch.zeros((2, config.num_arms))
         self.ite[:, self.causal_ids] = (torch.rand((2, self.config.causal_arms))*2-1) * self.config.loc_multiplier
-        
-        if self.config.fixed_scenario:
+        self.variance = torch.rand((2, self.config.num_arms)) / self.config.scale_divider
+
+        if self.config.fixed_1ou2:
             self.causal_ids =  np.array([0])
             self.ite = torch.FloatTensor([[-30, 0], [50, 0]])
 
-        self.variance = torch.rand((2, self.config.num_arms)) / self.config.scale_divider
+        if self.config.fixed_2ou5:
+            self.causal_ids =  np.array([0, 4])
+            self.ite = torch.FloatTensor([[-30, 0, 0,0, 50], [50, 0,0,0,-20]])
+        
+
 
         if self.config.pretend_all_causal:
             self.causal_ids = np.arange(config.num_arms)
-            
+
         self.causal_ids = torch.LongTensor(self.causal_ids)
 
         if self.config.cuda:
