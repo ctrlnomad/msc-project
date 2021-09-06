@@ -50,8 +50,8 @@ class CausalMnistBanditsEnv(gym.Env):
 
         self.default_probs = torch.rand(self.config.num_arms)
 
-        if self.config.sig_probs:
-            self.default_probs = torch.sigmoid((self.default_probs-0.5)*20)
+        if self.config.fixed_2ou5:
+            self.default_probs = torch.FloatTensor([0.01,0.95,0.03,0.97,0.99])
             
         self.default_dist = distributions.Bernoulli(probs=self.default_probs)
     
@@ -71,6 +71,7 @@ class CausalMnistBanditsEnv(gym.Env):
         if self.config.fixed_2ou5:
             self.causal_ids =  np.array([0, 4])
             self.ite = torch.FloatTensor([[-30, 0, 0,0, 50], [50, 0,0,0,-20]])
+            self.
         
 
 
