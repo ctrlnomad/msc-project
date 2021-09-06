@@ -48,12 +48,7 @@ class CausalMnistBanditsEnv(gym.Env):
 
         self.observation_space = spaces.Box(0, 122, (self.config.num_arms, 28, 28) ) # what about the other arms observation
 
-        self.default_probs = torch.rand(self.config.num_arms)
-
-        if self.config.fixed_2ou5:
-            self.default_probs = torch.FloatTensor([0.01,0.95,0.03,0.97,0.99])
-            
-        self.default_dist = distributions.Bernoulli(probs=self.default_probs)
+        self.default_probs = torch.rand(self.config.num_arms)            
     
         self.causal_ids = np.random.choice(np.arange(config.num_arms), size=config.causal_arms, replace=False)
         
@@ -67,13 +62,15 @@ class CausalMnistBanditsEnv(gym.Env):
         if self.config.fixed_1ou2:
             self.causal_ids =  np.array([0])
             self.ite = torch.FloatTensor([[-30, 0], [50, 0]])
+            self.default_probs = torch.FloatTensor([0.63, 0.5]) 
 
         if self.config.fixed_2ou5:
             self.causal_ids =  np.array([0, 4])
             self.ite = torch.FloatTensor([[-30, 0, 0,0, 50], [50, 0,0,0,-20]])
-            self.
-        
+            self.default_probs = torch.FloatTensor([0.01,0.95,0.03,0.97,0.99]) # unfortunate scenarios
 
+        
+        self.default_dist = distributions.Bernoulli(probs=self.default_probs)
 
         if self.config.pretend_all_causal:
             self.causal_ids = np.arange(config.num_arms)
