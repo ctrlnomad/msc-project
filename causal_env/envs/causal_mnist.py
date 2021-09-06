@@ -30,7 +30,10 @@ class CausalMnistBanditsConfig:
     loc_multiplier: int = 50
 
     sig_probs: bool = False
-    fixed_scenario: bool = False
+    
+    fixed_2ou5: bool = False
+    fixed_1ou2: bool = False
+
     pretend_all_causal: bool  = False
 
 class CausalMnistBanditsEnv(gym.Env):
