@@ -40,7 +40,7 @@ class DropoutEstimator(BaseEstimator):
         if self.config.cuda:
             self.net = self.net.cuda()
 
-        self.opt = optim.Adam(self.net.parameters())
+        self.opt = optim.Adam(self.net.parameters(), lr=self.config.lr)
         self.train_fn = cate_train_loop if CATE else train_loop
 
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
@@ -97,10 +97,10 @@ class EnsembleEstimator(BaseEstimator):
 
         if self.config.cuda:
             self.ensemble = [n.cuda() for n in self.ensemble]
-            
+
         self.train_fn = cate_train_loop if CATE else train_loop
         self.opt_cls = optim.Adam
-        self.opts = [self.opt_cls(n.parameters()) for n in self.ensemble]
+        self.opts = [self.opt_cls(n.parameters(), lr=self.config.lr) for n in self.ensemble]
         
 
     def compute_uncertainty(self, contexts: torch.Tensor) -> torch.Tensor:
