@@ -77,7 +77,7 @@ if __name__ == '__main__':
                 vis.collect_arm_distributions(agent, mnist_env, timestep)
 
             op = mnist_env.noop
-            if config.num_ts * config.do_nothing < timestep.id:
+            if config.exploration != 'off' and config.num_ts * config.do_nothing < timestep.id:
                 if config.exploration == 'random':
                     while op == mnist_env.noop:
                         op = mnist_env.action_space.sample()
