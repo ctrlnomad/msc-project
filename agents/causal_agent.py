@@ -36,6 +36,7 @@ class CausalAgentConfig:
 
     fixed_sigma: bool = False
     sigmoid_sigma: bool = False
+    sigma: float = 1e-3
 
     lr: float  = 1e-3
     
