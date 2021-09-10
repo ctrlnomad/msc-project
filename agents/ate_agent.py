@@ -40,6 +40,9 @@ class ATEAgentConfig:
 
     sigmoid_sigma: bool = False
     fixed_sigma: bool = False
+
+    sigma: float = 1e-3
+    lr: float = 1e-3
 class ATEAgent(BaseAgent):
     """
     half the round we learn by empty interventions

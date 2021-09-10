@@ -1,21 +1,19 @@
-from typing import Tuple, List
-from dataclasses import dataclass, field
+from typing import Tuple
+from dataclasses import dataclass
 import numpy as np
 from collections import deque
-from numpy.core.fromnumeric import nonzero
+
 
 import torch
 import torch.nn as nn
 from torch.nn.modules import utils
-import torch.optim as optim
 
 from torch.utils.data import DataLoader
-import torch.distributions as distributions
 
 from causal_env.envs import Timestep, TimestepDataset
 from agents.base_agent import BaseAgent
 
-import  agents.uncertainty_estimators.estimators as estimators
+import utils
 
 import logging
 logger = logging.getLogger(__name__)
@@ -39,6 +37,8 @@ class CausalAgentConfig:
     sigma: float = 1e-3
 
     lr: float  = 1e-3
+
+    stochastic_acquisition: bool = False
     
 class CausalAgent(BaseAgent):
     """
@@ -74,9 +74,14 @@ class CausalAgent(BaseAgent):
         
     def act(self, timestep: Timestep):
         uncertaitnties = self.compute_digit_uncertainties(timestep.context)
-        # given contexts what combination of treatments would be most interesting??
-        # how to get that?
-        # mechanism for combinations of things, 
+        
+        if self.config.stochastic_acquisition:
+            unc = uncertaitnties.flatten()
+            unc_probs = unc / unc.sum()
+            unc_probs = utils.safenumpy(unc_probs)
+            intervention = np.random.choice(unc_probs.shape[0], p=unc_probs)
+            return intervention
+
         loc = (uncertaitnties.max() == uncertaitnties).nonzero().squeeze()
         intervention = loc[1] + len(timestep.context)* loc[0]
         return intervention.item()

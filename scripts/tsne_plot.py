@@ -1,5 +1,4 @@
 import sys, pathlib
-from utils import mnist
 sys.path.append(str(pathlib.Path(__file__).parent.parent.absolute()))
 
 import torch, numpy as np
@@ -14,9 +13,10 @@ from causal_env.envs import CausalMnistBanditsConfig, CausalMnistBanditsEnv, cau
 from agents import ATEAgent, ATEAgentConfig
 from sklearn.manifold import TSNE
 
-from argparse_dataclass import ArgumentParser
+from simple_parsing import ArgumentParser
 
 import utils
+from utils import mnist
 from utils.wb_vis import WBVis
 
 import matplotlib.pyplot as  plt
@@ -36,11 +36,10 @@ class Options(CausalMnistBanditsConfig, ATEAgentConfig):
   seed: int = 5000
   debug: bool = False
 
-  log_file: str = None
-
-  telemetry_dir: str = None
+  tsne_dir: str = './tsne_plots'
   telemetry_every: int = 1
 
+  perplexity: int =  30
   tsne_every: int = 500
 
   random_explore: bool = False
@@ -63,7 +62,7 @@ def compute_tsne_embeddings(config, agent, env, file_name):
 
     emb = utils.safenumpy(agent.estimator.net.conv_block(data))
     logger.warning('starting TSNE ...')
-    tsne_emb = TSNE(n_components=2, random_state=config.seed).fit_transform(emb)
+    tsne_emb = TSNE(n_components=2, perplexity=config.perplexity, random_state=config.seed).fit_transform(emb)
     logger.warning('done TSNE, plotting ...')
 
     fig, ax = plt.subplots(figsize=(12,10))
@@ -79,13 +78,14 @@ def compute_tsne_embeddings(config, agent, env, file_name):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(Options)
-    config = parser.parse_args()
+    parser = ArgumentParser()
+    parser.add_arguments(Options, dest='options')
+    config = parser.parse_args().options
 
     config.Arch = arches.ConvNet
     config.Estimator = estimators.DropoutEstimator
 
-    tsne_dir = Path('./tsne_plots')
+    tsne_dir = Path(config.tsne_dir)
     tsne_dir.mkdir(exist_ok = True)
 
     logger.warning(f'running with Arch={config.Arch} and Estimator={config.Estimator}')
