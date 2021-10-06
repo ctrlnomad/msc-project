@@ -2,16 +2,17 @@ import gym
 import numpy as np
 from dataclasses import dataclass
 
-from causal_env.envs import CausalMnistBanditsConfig
+from causal_env.envs import CausalMnistBanditsConfig, CausalMnistBanditsEnv
 from agents.baseline import BaselineAgent, UCBSocket, GaussianThompsonSocket
-from argparse_dataclass import ArgumentParser
+from simple_parsing import ArgumentParser
 
-from utils.tb_vis import TensorBoardVis, safenumpy
+import utils
+from utils.wb_vis import WBVis
 import logging
 
 logging.basicConfig(format='%(asctime)s:%(filename)s:%(message)s',
                      datefmt='%m/%d %I:%M:%S %p',  
-                     level=logging.DEBUG)
+                     level=logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -19,27 +20,32 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Options(CausalMnistBanditsConfig):
   seed: int = 5000
-  debug: bool = False
-
-  log_file: str = None
-
-  telemetry_dir: str = None
   telemetry_every: int = 1 
+  cuda: bool = False
+  api_key: str = ''
+  group: str = ''
+  socket:str = 'thompson'
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(Options)
-    config = parser.parse_args()
-    socket = GaussianThompsonSocket
+    parser = ArgumentParser()
+    parser.add_arguments(Options, dest='options')
+    config = parser.parse_args().options
+
+    if config.socket == 'thompson':
+      socket = GaussianThompsonSocket
+    elif config.socket =='ucb':
+      socket = UCBSocket
+
     logger.warn(f'FILE: {__name__} \n\trunning with Socket={socket} for T={config.num_ts}')
     
-    mnist_env = gym.make('CausalMnistBanditsEnv-v0')
+    mnist_env = CausalMnistBanditsEnv()
     mnist_env.init(config)
 
     logger.info(config)
 
     agent = BaselineAgent(mnist_env.action_space.n, socket)
-    vis = TensorBoardVis(config)
+    vis = WBVis(config, agent, mnist_env)
 
     timestep = mnist_env.reset()
 
@@ -52,15 +58,10 @@ if __name__ == '__main__':
 
       op = agent.act(timestep)
 
-      # Qs
-      #vis.writer.add_scalars
-
       old_timestep, timestep = mnist_env.step(op)
       agent.observe(old_timestep)
     
     print('\n\n', mnist_env.ite, mnist_env.variance)
-    #vis.record_distributions(mnist_env, 'Once/Environment', mnist_env.ite, mnist_env.variance)
-    #vis.record_distributions(mnist_env, 'Once/Agent', *agent.compute_digit_distributions(mnist_env.digit_contexts))
 
 
 

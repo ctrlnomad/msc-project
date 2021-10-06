@@ -36,6 +36,7 @@ class CausalMnistBanditsConfig:
 
     pretend_all_causal: bool  = False
     optimal_probs: bool = False
+    mid_probs:bool = False
 
 class CausalMnistBanditsEnv(gym.Env):
     def init(self, config: CausalMnistBanditsConfig) -> None:
@@ -71,6 +72,8 @@ class CausalMnistBanditsEnv(gym.Env):
 
             if self.config.optimal_probs:
                 self.default_probs = torch.ones(self.config.num_arms) * 0.5
+            elif self.config.mid_probs:
+                self.default_probs = torch.FloatTensor([0.01,0.95,0.5,0.5,0.5])
             else:
                 self.default_probs = torch.FloatTensor([0.01,0.95,0.03,0.97,0.99]) # unfortunate scenarios
             

@@ -1,5 +1,5 @@
 import sys, pathlib
-from typing import Any
+
 sys.path.append(str(pathlib.Path(__file__).parent.parent.absolute()))
 
 import torch
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from causal_env.envs import CausalMnistBanditsConfig, CausalMnistBanditsEnv
 from agents import CausalAgent, CausalAgentConfig
-#from argparse_dataclass import ArgumentParser
+
 from simple_parsing import ArgumentParser
 
 from utils.wb_vis import WBVis

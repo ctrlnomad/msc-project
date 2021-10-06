@@ -57,6 +57,10 @@ class UCBSocket(PowerSocket):
     def sample(self,t):
         """ the UCB reward is the estimate of the mean reward plus its uncertainty """
         return self.Q + self.uncertainty(t)
+        
+    @property
+    def mu(self):
+        return self.Q
 
 class GaussianThompsonSocket(PowerSocket):
     def __init__(self):                
@@ -123,10 +127,13 @@ class BaselineAgent(BaseAgent):
             return None
 
     def compute_digit_distributions(self, contexts: torch.Tensor):
-        if hasattr(self.sockets[0], 'mu') and hasattr(self.sockets[0], 'sigma'):
-            return torch.Tensor([s.mu for s in self.sockets]),  torch.Tensor([s.sigma for s in self.sockets])
-        else:
-            return None, None
+        mu,sigma = None, None
+        if hasattr(self.sockets[0], 'mu'):
+            mu=torch.Tensor([s.mu for s in self.sockets]).view(2, -1)
+        elif hasattr(self.sockets[0], 'sigma'):
+            sigma = torch.Tensor([s.sigma for s in self.sockets]).view(2, -1)
+
+        return mu, sigma
             
     def compute_best_action(self, contexts: torch.Tensor):
         return random_argmax([s.Q for  s in self.sockets])
